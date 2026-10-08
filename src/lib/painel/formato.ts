@@ -18,3 +18,17 @@ export function fmtData(iso: string) {
   const [, m, d] = iso.split('-');
   return `${d}/${m}`;
 }
+
+// Lê valor em reais digitado pelo admin. Aceita "1.234,56", "1234,56", "1234.56"
+// e "1234". Ponto seguido de 1 ou 2 dígitos no fim é decimal ("1500.50"); senão
+// é separador de milhar ("1.500"). Sem isso, "1500.50" virava R$ 150.050,00.
+// Vazio → null. Inválido → NaN (quem chama decide a mensagem).
+export function lerReais(texto: string): number | null {
+  const v = texto.trim().replace(/^R\$\s*/, '').replace(/\s/g, '');
+  if (v === '') return null;
+  let normal: string;
+  if (v.includes(',')) normal = v.replace(/\./g, '').replace(',', '.');
+  else if (/^\d+\.\d{1,2}$/.test(v)) normal = v;
+  else normal = v.replace(/\./g, '');
+  return /^\d+(\.\d+)?$/.test(normal) ? Number(normal) : NaN;
+}

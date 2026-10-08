@@ -7,7 +7,7 @@
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
 import { METRICAS_RELATORIO } from '@/lib/painel/metricas';
-
+import { lerReais } from '@/lib/painel/formato';
 
 async function dbAdmin() {
   const supabase = await createClient();
@@ -20,6 +20,7 @@ function ok(error: { message: string } | null) {
   if (error) throw new Error(error.message);
   revalidatePath('/config');
   revalidatePath('/');
+  revalidatePath('/conta');
 }
 
 export async function criarCliente(form: FormData) {
@@ -36,13 +37,20 @@ export async function alternarCliente(form: FormData) {
     .eq('id', String(form.get('id')))).error);
 }
 
+function reais(form: FormData, campo: string): number | null {
+  const n = lerReais(String(form.get(campo) ?? ''));
+  if (Number.isNaN(n)) throw new Error(`Valor inválido em ${campo}: use 1.234,56 ou 1234.56`);
+  return n;
+}
+
 export async function salvarConta(form: FormData) {
-  const limite = String(form.get('limite') ?? '').trim().replace(/\./g, '').replace(',', '.');
   const db = await dbAdmin();
   ok((await db.from('contas_anuncio').update({
     cliente_id: String(form.get('cliente_id') || '') || null,
-    // Vazio = sem alerta de saldo para esta conta.
-    limite_alerta_saldo: limite === '' ? null : Number(limite),
+    // Vazio = sem alerta / sem meta para esta conta.
+    limite_alerta_saldo: reais(form, 'limite'),
+    verba_mensal: reais(form, 'verba'),
+    cpl_meta: reais(form, 'cpl_meta'),
     ativa: form.get('ativa') === 'on',
   }).eq('id', String(form.get('id')))).error);
 }

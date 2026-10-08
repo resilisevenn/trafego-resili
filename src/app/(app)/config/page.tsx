@@ -4,6 +4,7 @@
 
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { buscarTodas } from '@/lib/supabase/paginar';
 import { alternarCliente, criarCliente, salvarAcesso, salvarConta, salvarRelatorio } from './acoes';
 import { METRICAS_RELATORIO } from '@/lib/painel/metricas';
 
@@ -17,10 +18,12 @@ export default async function ConfigPage() {
   const db = supabase.schema('trafego');
   const [clientesR, contasR, acessosR, configR, campanhasR, gestoresR] = await Promise.all([
     db.from('clientes').select('id, nome, ativo').order('nome'),
-    db.from('contas_anuncio').select('id, nome, plataforma, conta_id, cliente_id, limite_alerta_saldo, ativa').order('plataforma').order('nome'),
+    db.from('contas_anuncio').select('id, nome, plataforma, conta_id, cliente_id, limite_alerta_saldo, verba_mensal, cpl_meta, ativa').order('plataforma').order('nome'),
     db.from('acesso_conta').select('user_id, conta_anuncio_id'),
     db.from('relatorio_config').select('conta_anuncio_id, incluir, metricas, campanhas'),
-    db.from('campanhas').select('conta_anuncio_id, campanha_id, nome, status').order('nome'),
+    // Paginado: somando todas as contas, as campanhas passam de 1000 com o tempo.
+    buscarTodas((de, ate) => db.from('campanhas').select('conta_anuncio_id, campanha_id, nome, status')
+      .order('nome').order('conta_anuncio_id').order('campanha_id').range(de, ate)),
     db.rpc('listar_gestores'),
   ]);
 
@@ -29,8 +32,8 @@ export default async function ConfigPage() {
   const gestores = (gestoresR.data ?? []) as { user_id: string; email: string }[];
   const acessos = acessosR.data ?? [];
   const configs = new Map((configR.data ?? []).map((c) => [c.conta_anuncio_id, c]));
-  const campanhasDa = (id: string) => (campanhasR.data ?? []).filter((c) => c.conta_anuncio_id === id);
-  const erro = [clientesR, contasR, acessosR, configR, campanhasR, gestoresR].find((r) => r.error)?.error;
+  const campanhasDa = (id: string) => campanhasR.filter((c) => c.conta_anuncio_id === id);
+  const erro = [clientesR, contasR, acessosR, configR, gestoresR].find((r) => r.error)?.error;
 
   return (
     <div className="flex flex-col gap-10">
@@ -60,7 +63,7 @@ export default async function ConfigPage() {
       </Secao>
 
       {/* ── Contas ── */}
-      <Secao titulo="Contas de anúncio" ajuda="Contas novas entram sozinhas na coleta. Ligue cada uma a um cliente. Limite de saldo vazio = sem alerta.">
+      <Secao titulo="Contas de anúncio" ajuda="Contas novas entram sozinhas na coleta. Ligue cada uma a um cliente. Campos vazios = sem alerta. Verba e meta de CPL são os valores combinados com o cliente.">
         <div className="card overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-xs text-muted text-left">
@@ -68,6 +71,8 @@ export default async function ConfigPage() {
                 <th className="p-3 font-medium">Conta</th>
                 <th className="p-3 font-medium">Cliente</th>
                 <th className="p-3 font-medium">Limite de alerta (R$)</th>
+                <th className="p-3 font-medium">Verba mensal (R$)</th>
+                <th className="p-3 font-medium">Meta de CPL (R$)</th>
                 <th className="p-3 font-medium">Ativa</th>
                 <th className="p-3" />
               </tr>
@@ -92,6 +97,17 @@ export default async function ConfigPage() {
                       defaultValue={c.limite_alerta_saldo == null ? '' : String(c.limite_alerta_saldo).replace('.', ',')}
                     />
                   </td>
+                  {(['verba', 'cpl_meta'] as const).map((campo) => {
+                    const v = campo === 'verba' ? c.verba_mensal : c.cpl_meta;
+                    return (
+                      <td key={campo} className="p-3">
+                        <input
+                          name={campo} form={`conta-${c.id}`} className="input w-28 tabular-nums" inputMode="decimal"
+                          defaultValue={v == null ? '' : String(v).replace('.', ',')}
+                        />
+                      </td>
+                    );
+                  })}
                   <td className="p-3">
                     <input name="ativa" form={`conta-${c.id}`} type="checkbox" defaultChecked={c.ativa} />
                   </td>

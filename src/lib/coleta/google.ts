@@ -44,6 +44,7 @@ export type LinhaCampanha = {
     averageCpc?: number;
     averageCpm?: number;
     conversions?: number;
+    searchImpressionShare?: number;
   };
 };
 
@@ -65,6 +66,8 @@ export function paraMetrica(l: LinhaCampanha) {
     // fracionado (atribuição). Não há "conversas" separadas no Google.
     leads: m.conversions ?? null,
     conversas: null,
+    // Fração 0–1. Só vem em campanha de pesquisa; nas outras fica nula.
+    parcela_impressoes: m.searchImpressionShare ?? null,
     bruto: l,
   };
 }
@@ -153,7 +156,9 @@ export function listarContas(c: CredGoogle, acesso: string) {
     SELECT customer_client.id, customer_client.descriptive_name, customer_client.currency_code,
            customer_client.time_zone, customer_client.status
     FROM customer_client
-    WHERE customer_client.manager = FALSE AND customer_client.level >= 1`);
+    WHERE customer_client.manager = FALSE AND customer_client.level >= 1
+      AND customer_client.status = 'ENABLED'`);
+  // Só ativas: conta cancelada/suspensa na MCC daria erro de coleta todo dia.
 }
 
 export function buscarCampanhas(
@@ -163,7 +168,8 @@ export function buscarCampanhas(
   return consultar<LinhaCampanha>(c, acesso, customerId, `
     SELECT campaign.id, campaign.name, campaign.status, campaign.advertising_channel_type,
            segments.date, metrics.cost_micros, metrics.impressions, metrics.clicks,
-           metrics.ctr, metrics.average_cpc, metrics.average_cpm, metrics.conversions
+           metrics.ctr, metrics.average_cpc, metrics.average_cpm, metrics.conversions,
+           metrics.search_impression_share
     FROM campaign
     WHERE segments.date BETWEEN '${periodo.since}' AND '${periodo.until}'`);
 }

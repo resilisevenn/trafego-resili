@@ -5,6 +5,7 @@
 // voltar, e a página (server component) relê os dados a cada troca.
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { PERIODOS } from '@/lib/painel/agregar';
 
 export type OpcaoConta = {
   id: string;
@@ -72,10 +73,7 @@ export function Seletor({ contas, contaId, periodo, de, ate }: {
 
       <Campo rotulo="Período">
         <select className="input" value={periodo} onChange={(e) => ir({ periodo: e.target.value, de: null, ate: null })}>
-          <option value="7d">Últimos 7 dias</option>
-          <option value="30d">Últimos 30 dias</option>
-          <option value="mes">Mês atual</option>
-          <option value="custom">Personalizado</option>
+          {PERIODOS.map(([chave, rotulo]) => <option key={chave} value={chave}>{rotulo}</option>)}
         </select>
       </Campo>
 

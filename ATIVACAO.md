@@ -36,7 +36,9 @@ As migrations já foram testadas num PostgreSQL local:
 | `GOOGLE_ADS_*` | os mesmos valores do `~/google-ads.yaml` |
 
 3. Domínio: `trafego.resilisevenn.pro`.
-4. O cron já está em `vercel.json`: todo dia às 09h UTC (06h de Brasília).
+4. O cron já está em `vercel.json`: todo dia às 09h UTC (06h de Brasília). O plano
+   gratuito da Vercel só permite 1 execução por dia. Durante o dia, o botão
+   **Atualizar** do dashboard coleta só a clínica na tela (trava de 5 minutos).
 
 ## 3. Primeira coleta (sem esperar o cron)
 

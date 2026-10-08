@@ -40,6 +40,7 @@ export async function proxy(request: NextRequest) {
 
 // api/cron fica de fora: o Vercel Cron não tem sessão, e a rota se protege
 // sozinha com o CRON_SECRET. Sem isto, o cron seria redirecionado para /login.
+// previa também: é local, com dados fictícios, e responde 404 fora do dev.
 export const config = {
-  matcher: ['/((?!api/cron|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  matcher: ['/((?!api/cron|previa|_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 };

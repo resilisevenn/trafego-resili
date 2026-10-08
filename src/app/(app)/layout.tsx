@@ -1,4 +1,4 @@
-import Link from 'next/link';
+import { Cabecalho } from '@/components/cabecalho';
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 
@@ -18,20 +18,15 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
 
   return (
     <>
-      <header className="border-b border-border">
-        <div className="mx-auto max-w-[1200px] px-5 h-14 flex items-center gap-6">
-          <Link href="/" className="font-semibold text-sm">Tráfego — Resili Sevenn</Link>
-          {papel.role === 'admin' && (
-            <Link href="/config" className="text-sm text-muted hover:text-foreground">Configuração</Link>
-          )}
-          <div className="ml-auto flex items-center gap-3">
-            <span className="text-sm text-muted">{user.email}</span>
-            <form action={sair}>
-              <button type="submit" className="text-sm text-faint hover:text-foreground">Sair</button>
-            </form>
-          </div>
-        </div>
-      </header>
+      <Cabecalho
+        email={user.email ?? ''}
+        admin={papel.role === 'admin'}
+        sair={
+          <form action={sair}>
+            <button type="submit" className="text-sm text-faint hover:text-foreground">Sair</button>
+          </form>
+        }
+      />
       <main className="flex-1 mx-auto w-full max-w-[1200px] px-5 py-8">{children}</main>
     </>
   );

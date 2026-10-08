@@ -10,5 +10,6 @@ export const METRICAS_RELATORIO = [
   ['cpc', 'CPC'],
   ['cpm', 'CPM'],
   ['leads', 'Leads'],
+  ['cpl', 'Custo por lead'],
   ['conversas', 'Conversas'],
 ] as const;

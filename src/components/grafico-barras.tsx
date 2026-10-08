@@ -8,18 +8,27 @@
 // discreta. Passar o mouse (ou focar com o teclado) mostra o valor do dia.
 
 import { useState } from 'react';
-import { fmtData } from '@/lib/painel/formato';
+import { fmtContagem, fmtData, fmtMoeda } from '@/lib/painel/formato';
+
+// Formato por NOME, não por função: função não atravessa de server component
+// para client component (o Next recusa em tempo de execução).
+const FORMATOS = { moeda: fmtMoeda, contagem: fmtContagem } as const;
 
 const ALTURA = 160;
 const MARGEM = { topo: 8, base: 22, esq: 4, dir: 4 };
 
-export function GraficoBarras({ titulo, serie, formatar }: {
+export function GraficoBarras({ titulo, serie, formato }: {
   titulo: string;
   serie: { data: string; valor: number }[];
-  formatar: (v: number) => string;
+  formato: keyof typeof FORMATOS;
 }) {
+  const formatar = FORMATOS[formato];
   const [ativo, setAtivo] = useState<number | null>(null);
+  // Resumo no canto: alterna entre máximo e média a cada clique.
+  const [resumo, setResumo] = useState<'max' | 'media'>('max');
   const max = Math.max(...serie.map((p) => p.valor), 0);
+  // Média diária sobre TODOS os dias do período, inclusive os zerados.
+  const media = serie.length ? serie.reduce((s, p) => s + p.valor, 0) / serie.length : 0;
   const largura = 100 / Math.max(serie.length, 1); // em % da área útil
   const alturaUtil = ALTURA - MARGEM.topo - MARGEM.base;
   // Rótulos do eixo X sem colidir: no máximo ~8 datas.
@@ -30,9 +39,20 @@ export function GraficoBarras({ titulo, serie, formatar }: {
     <figure className="card p-4">
       <figcaption className="flex items-baseline justify-between mb-3">
         <span className="text-sm font-medium">{titulo}</span>
-        <span className="text-sm text-muted tabular-nums" aria-live="polite">
-          {sel ? `${fmtData(sel.data)}: ${formatar(sel.valor)}` : `Máx.: ${formatar(max)}`}
-        </span>
+        {sel ? (
+          <span className="text-sm text-muted tabular-nums" aria-live="polite">
+            {fmtData(sel.data)}: {formatar(sel.valor)}
+          </span>
+        ) : (
+          <button
+            type="button"
+            className="text-sm text-muted tabular-nums hover:text-foreground"
+            onClick={() => setResumo((r) => (r === 'max' ? 'media' : 'max'))}
+            title={resumo === 'max' ? 'Clique para ver a média diária' : 'Clique para ver o máximo'}
+          >
+            {resumo === 'max' ? `Máx.: ${formatar(max)}` : `Média: ${formatar(media)}/dia`} ⇄
+          </button>
+        )}
       </figcaption>
 
       <svg

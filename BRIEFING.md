@@ -2,6 +2,8 @@
 
 **Criado em:** 2026-10-08 · **Dono:** Jackson Marques
 **URL:** `trafego.resilisevenn.pro` · **Deploy:** Vercel · **Banco:** Supabase do projeto Carteira de Clientes
+**Estado (08/10/2026):** código das Fases 1 a 5 pronto e testado; falta ativar (Supabase, Vercel, n8n).
+Ver o checklist na seção 11 e o passo a passo em `ATIVACAO.md`.
 
 ---
 
@@ -69,16 +71,18 @@ rodar `supabase db push`. Cada migration leva um cabeçalho comentado dizendo o 
 | Tabela | Conteúdo |
 |---|---|
 | `trafego.clientes` | Cliente da agência no tráfego (nome, ativo). Não referencia `public.clientes` do Carteira, para o gestor não depender de tabela que não pode ler |
-| `trafego.contas_anuncio` | `plataforma` (meta/google), `conta_id` nativo, nome, `cliente_id`, `limite_alerta_saldo`, `ativa` |
+| `trafego.contas_anuncio` | `plataforma` (meta/google), `conta_id` nativo, nome, `cliente_id`, `limite_alerta_saldo`, `verba_mensal`, `cpl_meta`, `ativa` |
 | `trafego.acesso_conta` | `user_id` × `conta_anuncio_id`: quais contas cada gestor vê |
 | `trafego.campanhas` | Estrutura: campanha, conjunto/grupo, anúncio (ids e nomes nativos), status |
 | `trafego.metricas_diarias` | Uma linha por **campanha por dia**, com unique `(conta, campanha_id, data)` e upsert |
 | `trafego.saldo_conta` | Foto diária do saldo: `conta`, `data`, `saldo`, `tipo_pagamento`, `fonte` (de qual campo veio), `bruto` (jsonb da resposta) |
 | `trafego.sync_log` | Cada execução da coleta: início, fim, status, linhas, erro |
 | `trafego.relatorio_config` | Por conta: quais campanhas entram no relatório de segunda e quais métricas |
+| `trafego.alerta_saldo` | Avisos de saldo enviados. A PK `(conta, data)` garante no máximo um por dia |
 
 **Colunas de `metricas_diarias`:** `investimento`, `impressoes`, `alcance`,
-`frequencia`, `cliques`, `ctr`, `cpc`, `cpm`, `leads`, `conversas`, mais `bruto jsonb`
+`frequencia`, `cliques`, `ctr`, `cpc`, `cpm`, `leads`, `conversas`, `parcela_impressoes`
+(só Google, pesquisa), mais `bruto jsonb`
 com a resposta original. O `bruto` permite criar métricas novas depois, sem coletar
 tudo de novo. As métricas extras que o Jackson vai passar entram como coluna nova.
 
@@ -225,28 +229,108 @@ _01/10 a 07/10 · vs. semana anterior_
 
 ## 10. Dashboard
 
-- Login pelo Supabase Auth (mesma base de usuários do Carteira).
-- **Seletor:** cliente → plataforma (Meta / Google) → conta.
-- **Período:** 7 dias, 30 dias, mês atual ou personalizado.
-- **Cards:** as 10 métricas, com variação contra o período anterior.
-- **Card de saldo**, destacado quando estiver abaixo do limite.
-- **Gráfico:** investimento e leads por dia.
-- **Tabela de campanhas:** as métricas por campanha.
-- **Tela de configuração (só admin):** ligar contas a clientes, definir o acesso de
-  cada gestor, o limite de saldo e as campanhas/métricas do relatório.
-- **Status da coleta:** última sincronização e erros (lidos de `sync_log`).
+- Login pelo Supabase Auth (mesma base de usuários do Carteira). Entra quem tem papel
+  em `public.user_roles`; sem papel, tela "sem acesso".
+- **Menu:** Visão geral · Por conta · Configuração (só admin).
+- **Visão geral (página inicial):** todas as contas que o usuário vê, ordenadas por
+  quem precisa de ação. Investimento, leads e CPL dos últimos 7 dias com variação,
+  saldo com **dias restantes**, **ritmo da verba do mês** e **alertas**.
+- **Por conta:**
+  - **Seletor:** cliente → plataforma (Meta / Google) → conta. Botão "← Visão geral".
+  - **Período:** Hoje, Esta semana, Semana anterior, Últimos 7 e 30 dias, Este mês,
+    Último mês, Este ano, Máximo, Personalizado. **Semana começa na segunda.**
+    Comparação com o trecho equivalente anterior (esta semana até quinta × semana
+    passada até quinta). "Máximo" não tem comparação.
+  - **Cards:** 10 por plataforma (5 + 5), com variação. Meta: Investimento, Alcance,
+    Frequência, Cliques, CTR, CPC, CPM, Leads, CPL, Conversas. Google: Investimento,
+    Impressões, Cliques, CTR, CPC, CPM, Conversões, Custo por conversão, Taxa de
+    conversão, Parcela de impressões.
+  - **Card de saldo**, destacado quando estiver abaixo do limite.
+  - **Gráficos separados** de investimento e de leads/conversões por dia (nunca eixo
+    duplo), com Máx. ⇄ Média ao clicar.
+  - **Tabela de campanhas** e **status da coleta** (de `sync_log`).
+  - **Botão "Atualizar":** coleta na hora só a clínica na tela (Meta e Google), com
+    trava de 5 minutos.
+- **Configuração (só admin):** clientes; por conta, o cliente, o limite de alerta de
+  saldo, a **verba mensal** e a **meta de CPL**; acesso de cada gestor; campanhas e
+  métricas do relatório.
+- **Coleta:** 1x por dia às 06h (Vercel Cron, plano gratuito) + botão "Atualizar".
 
-## 11. Fases
+**Alertas da visão geral** (limites em `src/lib/painel/saude.ts`, ajustáveis):
 
-| Fase | Onde | Entrega | Pronto quando |
-|---|---|---|---|
-| **0** | Carteira | Papéis + RLS "só admin" | Um usuário `gestor` de teste loga e não lê nenhuma linha do Carteira |
-| **1** | Aqui | Script de saldo, schema `trafego`, coleta Meta | 7 dias de métricas reais no banco batendo com o Gerenciador |
-| **2** | n8n | Relatório de segunda | Uma segunda chega no grupo sem ninguém tocar |
-| **3** | Aqui | Dashboard Meta + saldo + config | Os 3 usuários usam. O gestor vê só as contas dele |
-| **4** | Aqui | Coleta Google pela MCC + aba Google | Números batem com o Google Ads |
-| **5** | n8n | Alerta de saldo | Teste com limite alto dispara um único aviso |
-| **Depois** | — | Métricas extras (o Jackson vai passar) | — |
+| Alerta | Regra inicial |
+|---|---|
+| Saldo | 🔴 abaixo do limite ou < 3 dias · 🟡 < 7 dias |
+| Conta parou | 🔴 gasto zero ontem, numa conta que gastava ≥ R$ 5/dia |
+| CPL disparou | 🟡 7 dias 30% acima das 4 semanas anteriores (≥ 3 leads) |
+| Acima da meta | 🟡 CPL acima da meta do cliente |
+| Fadiga (Meta) | 🟡 frequência da semana > 3 |
+| Ritmo da verba | 🟡 projeção do mês > 110% ou < 80% da verba |
+| Coleta | 🟡 erro ou sem coleta há mais de 26 h |
+
+**Aproximação conhecida:** na Meta, alcance e frequência do período somam os
+alcances diários (quem viu em dois dias conta duas vezes). O número exato exige
+uma consulta extra por período `[PENDENTE DE DECISÃO]`.
+
+## 11. Fases — checklist
+
+Legenda: ✅ feito · 🟡 código pronto, falta ativar ou validar · ⬜ não começado
+
+| Fase | Onde | Entrega | Pronto quando | Estado |
+|---|---|---|---|---|
+| **0** | Carteira | Papéis + RLS "só admin" | Um usuário `gestor` de teste loga e não lê nenhuma linha do Carteira | 🟡 `0007_papeis.sql` escrita, não aplicada |
+| **1** | Aqui | Script de saldo, schema `trafego`, coleta Meta | 7 dias de métricas reais no banco batendo com o Gerenciador | 🟡 |
+| **2** | n8n | Relatório de segunda | Uma segunda chega no grupo sem ninguém tocar | 🟡 função no banco pronta; fluxo n8n a montar |
+| **3** | Aqui | Dashboard Meta + saldo + config | Os 3 usuários usam. O gestor vê só as contas dele | 🟡 |
+| **4** | Aqui | Coleta Google pela MCC + aba Google | Números batem com o Google Ads | 🟡 |
+| **5** | n8n | Alerta de saldo | Teste com limite alto dispara um único aviso | 🟡 função no banco pronta; fluxo n8n a montar |
+| **6** | n8n + aqui | Alertas de anomalia no WhatsApp | Conta parada / CPL disparado chegam no grupo, 1x por dia | ⬜ hoje só no painel |
+| **Depois** | — | Ver "Próximos" abaixo | — | ⬜ |
+
+### Fase 1 — base e coleta
+- [x] Teste de saldo Meta e Google (seção 7)
+- [x] Schema `trafego` com RLS (`0001`), testado em PostgreSQL local
+- [x] Coleta Meta e Google na rota `/api/cron/sync`, validada a seco com as APIs reais
+- [x] Busca paginada (o Supabase corta em 1000 linhas)
+- [ ] Supabase: aplicar Fase 0, `0001`, `0002` e expor o schema `trafego`
+- [ ] Vercel: projeto, variáveis de ambiente, domínio
+- [ ] Primeira coleta real e comparação de 3 campanhas com o Gerenciador (diferença < 1%)
+- [ ] Conferir tipos de ação de lead/conversa numa conta de cliente com leads (seção 6)
+- [ ] Conferir saldo do Google contra o painel de faturamento (seção 7)
+
+### Fase 2 — relatório de segunda
+- [x] `trafego.relatorio_semanal()`: uma mensagem por cliente, formato brasileiro, com CPL
+- [ ] Fluxo n8n: segunda 08h → função → UazAPI para o grupo interno
+- [ ] Uma segunda chegando sem ninguém tocar
+
+### Fase 3 — dashboard
+- [x] Login, visão geral, por conta, configuração, prévia local (`/previa`)
+- [x] Períodos, cards por plataforma, CPL, gráficos, botão Atualizar
+- [x] Dias de saldo, ritmo da verba, alertas de anomalia no painel
+- [ ] Abrir no navegador com dados reais
+- [ ] Criar os gestores e testar que cada um vê só as próprias contas
+
+### Fase 4 — Google
+- [x] Coleta pela MCC (só contas ativas), conversões, parcela de impressões
+- [ ] Validar números contra o Google Ads
+
+### Fase 5 — alerta de saldo
+- [x] `trafego.alertas_saldo_pendentes()`: no máximo 1 aviso por conta por dia
+- [ ] Fluxo n8n diário depois da coleta
+- [ ] Teste com limite alto: chega um único aviso
+
+### Fase 6 — alertas de anomalia no WhatsApp
+- [ ] Levar para o banco as regras de `src/lib/painel/saude.ts` (conta parou, CPL
+      disparou, fadiga, ritmo) e devolver só os alertas novos do dia, como no saldo
+- [ ] Ajustar os limites com dados reais antes de ligar o envio
+- [ ] Fluxo n8n diário depois da coleta
+
+### Próximos (aprovados, sem data)
+- [ ] Parcela de impressões perdida por orçamento × por classificação (Google)
+- [ ] Anotações na linha do tempo ("subimos a verba", "criativo novo")
+- [ ] Desempenho por anúncio/criativo (Meta): exige coleta por anúncio
+- [ ] Funil lead → agendamento → venda: v2, via Sevenn Clinic 360 (Dashboard ROI)
+- [ ] Métricas extras (o Jackson vai passar)
 
 **Validação dos números:** em cada fase, compare 3 campanhas com o painel da
 plataforma. Diferença acima de 1% precisa de explicação (fuso, atribuição ou janela)

@@ -66,6 +66,7 @@ export type Metrica = {
   cpm: number | null;
   leads: number | null;
   conversas: number | null;
+  parcela_impressoes: null; // métrica só do Google
   bruto: LinhaInsight;
 };
 
@@ -104,6 +105,7 @@ export function paraMetrica(l: LinhaInsight): Metrica {
     // omite quando a campanha nem rastreia aquilo. Zero afirmaria demais.
     leads: primeiraAcao(l.actions, TIPOS_LEAD),
     conversas: primeiraAcao(l.actions, TIPOS_CONVERSA),
+    parcela_impressoes: null,
     bruto: l,
   };
 }

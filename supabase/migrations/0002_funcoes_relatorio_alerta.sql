@@ -121,7 +121,7 @@ begin
         and (a.campanhas is null or m.campanha_id = any (a.campanhas));
 
       quer := coalesce(a.metricas,
-        array['investimento','impressoes','alcance','frequencia','cliques','ctr','cpc','cpm','leads','conversas']);
+        array['investimento','impressoes','alcance','frequencia','cliques','ctr','cpc','cpm','leads','cpl','conversas']);
 
       select s.saldo into saldo_atual
       from trafego.saldo_conta s
@@ -154,7 +154,9 @@ begin
       end if;
 
       partes := array[]::text[];
-      if 'leads' = any (quer) and b.lea_a is not null then partes := partes || ('Leads: ' || trafego.fmt_num(b.lea_a, 0) || trafego.fmt_var(b.lea_a, b.lea_b)); end if;
+      if 'leads' = any (quer) and b.lea_a is not null then partes := partes || (case a.plataforma when 'google' then 'Conversões: ' else 'Leads: ' end || trafego.fmt_num(b.lea_a, 0) || trafego.fmt_var(b.lea_a, b.lea_b)); end if;
+      -- CPL só com lead > 0: dividir por zero não é "R$ 0".
+      if 'cpl' = any (quer) and b.lea_a > 0 then partes := partes || (case a.plataforma when 'google' then 'Custo/conv. ' else 'CPL ' end || trafego.fmt_brl(b.inv_a / b.lea_a)); end if;
       if 'conversas' = any (quer) and b.con_a is not null then partes := partes || ('Conversas: ' || trafego.fmt_num(b.con_a, 0)); end if;
       linha := array_to_string(partes, ' · ');
       if linha <> '' then bloco := bloco || E'\n🎯 ' || linha; end if;

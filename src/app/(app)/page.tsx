@@ -1,37 +1,33 @@
-// Dashboard: uma conta de anúncio por vez, escolhida no seletor.
-//
-// Lê SÓ do banco, nunca da API ao vivo (BRIEFING, seção 3). Usa o cliente com a
-// sessão do usuário: a RLS do schema trafego garante que o gestor só recebe as
-// contas dele, mesmo que alguém edite o ?conta= da URL.
+// Visão geral: a página inicial. Todas as contas que o usuário vê (a RLS filtra:
+// o gestor só recebe as dele), com dias de saldo, ritmo da verba e alertas.
+// Clicar numa linha abre o dashboard da conta (/conta).
 
-import { Suspense } from 'react';
 import { createClient } from '@/lib/supabase/server';
-import { Seletor, type OpcaoConta } from '@/components/seletor';
-import { GraficoBarras } from '@/components/grafico-barras';
-import {
-  periodoAnterior, porCampanha, resolverPeriodo, seriePorDia, totais, variacao,
-  type LinhaMetrica, type Totais,
-} from '@/lib/painel/agregar';
+import { buscarTodas } from '@/lib/supabase/paginar';
+import { Aviso } from '@/components/painel';
+import { VisaoGeral, type LinhaGeral } from '@/components/visao-geral';
 import { hojeNoFuso } from '@/lib/coleta/datas';
-import {
-  fmtContagem, fmtData, fmtDecimal, fmtInteiro, fmtMoeda, fmtPct, SEM_DADO,
-} from '@/lib/painel/formato';
+import { prioridade, saude } from '@/lib/painel/saude';
+import type { LinhaMetrica } from '@/lib/painel/agregar';
 
-type Props = { searchParams: Promise<Record<string, string | undefined>> };
+const FUSO_PADRAO = 'America/Sao_Paulo';
 
-export default async function Dashboard({ searchParams }: Props) {
-  const q = await searchParams;
+function menos(dia: string, n: number) {
+  const d = new Date(`${dia}T12:00:00Z`);
+  d.setUTCDate(d.getUTCDate() - n);
+  return d.toISOString().slice(0, 10);
+}
+
+export default async function VisaoGeralPage() {
   const supabase = await createClient();
   const db = supabase.schema('trafego');
 
-  const { data: contasRaw, error } = await db
+  const { data: contas, error } = await db
     .from('contas_anuncio')
-    .select('id, nome, plataforma, fuso, limite_alerta_saldo, clientes(nome)')
-    .eq('ativa', true)
-    .order('nome');
-
+    .select('id, nome, plataforma, fuso, limite_alerta_saldo, verba_mensal, cpl_meta, clientes(nome)')
+    .eq('ativa', true);
   if (error) return <Aviso titulo="Erro ao ler as contas">{error.message}</Aviso>;
-  if (!contasRaw?.length) {
+  if (!contas?.length) {
     return (
       <Aviso titulo="Nenhuma conta disponível">
         Se você é gestor, peça ao administrador para liberar suas contas. Se é admin, a primeira
@@ -40,229 +36,78 @@ export default async function Dashboard({ searchParams }: Props) {
     );
   }
 
-  const contas = contasRaw.map((c) => ({
-    ...c,
-    // O join vem como objeto (FK para um) — o tipo gerado não sabe disso sem os tipos do banco.
-    cliente: (c.clientes as unknown as { nome: string } | null)?.nome ?? 'Sem cliente',
-  }));
-  const conta = contas.find((c) => c.id === q.conta) ?? contas[0];
+  // Janela única para todas as contas: 35 dias (4 semanas de base + a semana)
+  // ou desde o dia 1º do mês, o que vier antes. Uma consulta, não uma por conta.
+  const hoje = hojeNoFuso(FUSO_PADRAO);
+  const iniMes = `${hoje.slice(0, 8)}01`;
+  const desde = [menos(hoje, 36), iniMes].sort()[0];
+  const ids = contas.map((c) => c.id);
 
-  const periodo = resolverPeriodo(q.periodo, hojeNoFuso(conta.fuso), q.de, q.ate);
-  const anterior = periodoAnterior(periodo);
-
-  const [metricasR, campanhasR, saldoR, syncR] = await Promise.all([
-    db.from('metricas_diarias')
-      .select('campanha_id, data, investimento, impressoes, alcance, cliques, leads, conversas')
-      .eq('conta_anuncio_id', conta.id)
-      .gte('data', anterior.de)
-      .lte('data', periodo.ate),
-    db.from('campanhas').select('campanha_id, nome, status').eq('conta_anuncio_id', conta.id),
+  const [metricasR, saldosR, syncR] = await Promise.all([
+    // Paginado: todas as contas × 36 dias passa fácil de 1000 linhas.
+    buscarTodas((de, ate) => db.from('metricas_diarias')
+      .select('conta_anuncio_id, campanha_id, data, investimento, impressoes, alcance, cliques, leads, conversas')
+      .in('conta_anuncio_id', ids)
+      .gte('data', desde)
+      .order('conta_anuncio_id').order('data').order('campanha_id')
+      .range(de, ate)),
     db.from('saldo_conta')
-      .select('data, saldo, fonte, coletado_em')
-      .eq('conta_anuncio_id', conta.id)
-      .order('data', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
-    db.from('sync_log')
-      .select('inicio, status, erro, linhas')
-      .eq('conta_anuncio_id', conta.id)
-      .order('inicio', { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+      .select('conta_anuncio_id, data, saldo')
+      .in('conta_anuncio_id', ids)
+      .gte('data', menos(hoje, 7))
+      .order('data', { ascending: false }),
+    // Última coleta de cada conta: tudo dos últimos 3 dias, do mais recente.
+    // Sem coleta nesse intervalo, o alerta de coleta aparece — e é o certo.
+    buscarTodas((de, ate) => db.from('sync_log')
+      .select('conta_anuncio_id, inicio, status')
+      .in('conta_anuncio_id', ids)
+      .gte('inicio', `${menos(hoje, 3)}T00:00:00-03:00`)
+      .order('inicio', { ascending: false }).order('id', { ascending: false })
+      .range(de, ate)),
   ]);
 
-  // numeric chega como string do PostgREST: converte uma vez aqui.
-  const linhas: LinhaMetrica[] = (metricasR.data ?? []).map((m) => ({
-    campanha_id: m.campanha_id,
-    data: m.data,
-    investimento: Number(m.investimento),
-    impressoes: Number(m.impressoes),
-    alcance: m.alcance == null ? null : Number(m.alcance),
-    cliques: Number(m.cliques),
-    leads: m.leads == null ? null : Number(m.leads),
-    conversas: m.conversas == null ? null : Number(m.conversas),
-  }));
-  const doPeriodo = linhas.filter((l) => l.data >= periodo.de);
-  const atual = totais(doPeriodo);
-  const antes = totais(linhas.filter((l) => l.data < periodo.de));
-  const nomes = new Map((campanhasR.data ?? []).map((c) => [c.campanha_id, c]));
+  const num = (v: unknown) => (v == null ? null : Number(v));
+  const porConta = new Map<string, LinhaMetrica[]>();
+  for (const m of metricasR) {
+    const lista = porConta.get(m.conta_anuncio_id) ?? [];
+    lista.push({
+      campanha_id: m.campanha_id, data: m.data, investimento: Number(m.investimento),
+      impressoes: Number(m.impressoes), alcance: num(m.alcance), cliques: Number(m.cliques),
+      leads: num(m.leads), conversas: num(m.conversas),
+    });
+    porConta.set(m.conta_anuncio_id, lista);
+  }
+  // Listas vêm ordenadas do mais recente: a primeira de cada conta vence.
+  const primeiro = <T extends { conta_anuncio_id: string }>(xs: T[] | null) => {
+    const m = new Map<string, T>();
+    for (const x of xs ?? []) if (!m.has(x.conta_anuncio_id)) m.set(x.conta_anuncio_id, x);
+    return m;
+  };
+  const saldos = primeiro(saldosR.data);
+  const syncs = primeiro(syncR);
 
-  const opcoes: OpcaoConta[] = contas.map((c) => ({
-    id: c.id, nome: c.nome, plataforma: c.plataforma as OpcaoConta['plataforma'], cliente: c.cliente,
-  }));
+  const linhas: LinhaGeral[] = contas
+    .map((c) => {
+      const saldo = num(saldos.get(c.id)?.saldo);
+      return {
+        contaId: c.id,
+        cliente: (c.clientes as unknown as { nome: string } | null)?.nome ?? 'Sem cliente',
+        conta: c.nome,
+        plataforma: c.plataforma,
+        saldo,
+        saude: saude({
+          hoje: hojeNoFuso(c.fuso),
+          plataforma: c.plataforma,
+          linhas: porConta.get(c.id) ?? [],
+          saldo,
+          limiteAlerta: num(c.limite_alerta_saldo),
+          verbaMensal: num(c.verba_mensal),
+          cplMeta: num(c.cpl_meta),
+          ultimaColeta: syncs.get(c.id) ?? null,
+        }),
+      };
+    })
+    .sort((a, b) => prioridade(b.saude) - prioridade(a.saude) || a.cliente.localeCompare(b.cliente, 'pt-BR'));
 
-  return (
-    <div className="flex flex-col gap-6">
-      <Suspense>
-        <Seletor contas={opcoes} contaId={conta.id} periodo={periodo.chave} de={periodo.de} ate={periodo.ate} />
-      </Suspense>
-
-      <p className="text-sm text-muted">
-        {fmtData(periodo.de)} a {fmtData(periodo.ate)} · comparado com {fmtData(anterior.de)} a {fmtData(anterior.ate)}
-      </p>
-
-      <CardSaldo
-        saldo={saldoR.data?.saldo == null ? null : Number(saldoR.data.saldo)}
-        limite={conta.limite_alerta_saldo == null ? null : Number(conta.limite_alerta_saldo)}
-        data={saldoR.data?.data}
-        fonte={saldoR.data?.fonte}
-      />
-
-      <Cards atual={atual} antes={antes} plataforma={conta.plataforma} />
-
-      <div className="grid gap-4 md:grid-cols-2">
-        <GraficoBarras titulo="Investimento por dia" serie={seriePorDia(doPeriodo, periodo, 'investimento')} formatar={fmtMoeda} />
-        <GraficoBarras titulo="Leads por dia" serie={seriePorDia(doPeriodo, periodo, 'leads')} formatar={fmtContagem} />
-      </div>
-
-      <TabelaCampanhas linhas={porCampanha(doPeriodo)} nomes={nomes} />
-
-      <StatusColeta sync={syncR.data} />
-    </div>
-  );
-}
-
-// ── Cards de métricas ────────────────────────────────────────────────────────
-
-// "menor é melhor" inverte a cor da variação (CPC subir é ruim).
-const METRICAS: { chave: keyof Totais; rotulo: string; fmt: (v: number | null) => string; menorMelhor?: boolean; nota?: string }[] = [
-  { chave: 'investimento', rotulo: 'Investimento', fmt: fmtMoeda },
-  { chave: 'impressoes', rotulo: 'Impressões', fmt: fmtInteiro },
-  { chave: 'alcance', rotulo: 'Alcance', fmt: fmtInteiro, nota: 'Soma dos dias: quem viu em dois dias conta duas vezes.' },
-  { chave: 'frequencia', rotulo: 'Frequência', fmt: fmtDecimal, nota: 'Calculada sobre o alcance somado: tende a ficar abaixo da real.' },
-  { chave: 'cliques', rotulo: 'Cliques', fmt: fmtInteiro },
-  { chave: 'ctr', rotulo: 'CTR', fmt: fmtPct },
-  { chave: 'cpc', rotulo: 'CPC', fmt: fmtMoeda, menorMelhor: true },
-  { chave: 'cpm', rotulo: 'CPM', fmt: fmtMoeda, menorMelhor: true },
-  { chave: 'leads', rotulo: 'Leads', fmt: fmtContagem },
-  { chave: 'conversas', rotulo: 'Conversas', fmt: fmtContagem },
-];
-
-function Cards({ atual, antes, plataforma }: { atual: Totais; antes: Totais; plataforma: string }) {
-  return (
-    <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
-      {METRICAS.map((m) => {
-        const v = variacao(atual[m.chave], antes[m.chave]);
-        const bom = v == null ? null : m.menorMelhor ? v < 0 : v > 0;
-        // Investimento subir não é "bom" nem "ruim": fica neutro.
-        const neutro = m.chave === 'investimento';
-        return (
-          <div key={m.chave} className="card p-4" title={m.nota}>
-            <div className="text-xs text-muted">{m.rotulo}{m.nota && plataforma === 'meta' ? ' *' : ''}</div>
-            <div className="text-xl font-semibold tabular-nums mt-1">{m.fmt(atual[m.chave])}</div>
-            <div className="text-xs mt-1 tabular-nums">
-              {v == null ? (
-                <span className="text-faint">{SEM_DADO}</span>
-              ) : (
-                <span className={neutro ? 'text-muted' : bom ? 'text-ok' : 'text-bad'}>
-                  {v > 0 ? '▲' : v < 0 ? '▼' : '='} {fmtDecimal(Math.abs(v))}%
-                </span>
-              )}
-            </div>
-          </div>
-        );
-      })}
-    </div>
-  );
-}
-
-// ── Saldo ────────────────────────────────────────────────────────────────────
-
-const FONTES: Record<string, string> = {
-  spend_cap_menos_gasto: 'limite de gastos − gasto',
-  account_budget: 'orçamento da conta − gasto',
-  sem_limite: 'conta sem limite: sem saldo pela API',
-  sem_account_budget: 'sem orçamento de conta',
-};
-
-function CardSaldo({ saldo, limite, data, fonte }: { saldo: number | null; limite: number | null; data?: string; fonte?: string }) {
-  const baixo = saldo != null && limite != null && saldo < limite;
-  return (
-    <div className={`card p-4 flex flex-wrap items-center gap-x-6 gap-y-1 ${baixo ? 'border-bad' : ''}`}>
-      <div>
-        <div className="text-xs text-muted">Saldo da conta</div>
-        <div className="text-2xl font-semibold tabular-nums">{fmtMoeda(saldo)}</div>
-      </div>
-      {baixo && (
-        // Estado nunca só por cor: ícone + texto.
-        <div className="text-sm text-bad font-medium" role="status">⚠ Abaixo do limite de alerta ({fmtMoeda(limite)})</div>
-      )}
-      <div className="text-xs text-faint ml-auto">
-        {data ? `Foto de ${fmtData(data)}` : 'Ainda sem coleta'}
-        {fonte ? ` · ${FONTES[fonte] ?? fonte}` : ''}
-        {limite == null ? ' · sem limite de alerta definido' : ''}
-      </div>
-    </div>
-  );
-}
-
-// ── Tabela de campanhas ──────────────────────────────────────────────────────
-
-function TabelaCampanhas({ linhas, nomes }: {
-  linhas: ReturnType<typeof porCampanha>;
-  nomes: Map<string, { nome: string; status: string | null }>;
-}) {
-  if (!linhas.length) return <Aviso titulo="Sem dados no período">Nenhuma campanha veiculou nestes dias.</Aviso>;
-  return (
-    <div className="card overflow-x-auto">
-      <table className="w-full text-sm tabular-nums">
-        <thead className="text-xs text-muted text-right">
-          <tr className="border-b border-border">
-            <th className="text-left p-3 font-medium">Campanha</th>
-            <th className="p-3 font-medium">Investimento</th>
-            <th className="p-3 font-medium">Impressões</th>
-            <th className="p-3 font-medium">Cliques</th>
-            <th className="p-3 font-medium">CTR</th>
-            <th className="p-3 font-medium">CPC</th>
-            <th className="p-3 font-medium">CPM</th>
-            <th className="p-3 font-medium">Leads</th>
-            <th className="p-3 font-medium">Conversas</th>
-          </tr>
-        </thead>
-        <tbody className="text-right">
-          {linhas.map((c) => {
-            const info = nomes.get(c.campanha_id);
-            return (
-              <tr key={c.campanha_id} className="border-b border-border last:border-0">
-                <td className="text-left p-3">
-                  <div>{info?.nome ?? c.campanha_id}</div>
-                  {info?.status && <div className="text-xs text-faint">{info.status}</div>}
-                </td>
-                <td className="p-3">{fmtMoeda(c.investimento)}</td>
-                <td className="p-3">{fmtInteiro(c.impressoes)}</td>
-                <td className="p-3">{fmtInteiro(c.cliques)}</td>
-                <td className="p-3">{fmtPct(c.ctr)}</td>
-                <td className="p-3">{fmtMoeda(c.cpc)}</td>
-                <td className="p-3">{fmtMoeda(c.cpm)}</td>
-                <td className="p-3">{fmtContagem(c.leads)}</td>
-                <td className="p-3">{fmtContagem(c.conversas)}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    </div>
-  );
-}
-
-// ── Status e avisos ──────────────────────────────────────────────────────────
-
-function StatusColeta({ sync }: { sync: { inicio: string; status: string; erro: string | null; linhas: number | null } | null }) {
-  if (!sync) return <p className="text-xs text-faint">Coleta: ainda não rodou para esta conta.</p>;
-  const quando = new Date(sync.inicio).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', dateStyle: 'short', timeStyle: 'short' });
-  return (
-    <p className={`text-xs ${sync.status === 'erro' ? 'text-bad' : 'text-faint'}`}>
-      Última coleta: {quando} ·{' '}
-      {sync.status === 'ok' ? `ok (${sync.linhas} linhas)` : sync.status === 'erro' ? `⚠ erro: ${sync.erro}` : 'rodando…'}
-    </p>
-  );
-}
-
-function Aviso({ titulo, children }: { titulo: string; children: React.ReactNode }) {
-  return (
-    <div className="card p-6">
-      <h2 className="font-semibold">{titulo}</h2>
-      <p className="text-sm text-muted mt-1">{children}</p>
-    </div>
-  );
+  return <VisaoGeral linhas={linhas} hrefConta={(id) => `/conta?conta=${id}`} />;
 }

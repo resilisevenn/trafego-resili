@@ -10,6 +10,7 @@ export type LinhaMetrica = {
   cliques: number;
   leads: number | null;
   conversas: number | null;
+  parcela_impressoes?: number | null; // só Google; fração 0–1
 };
 
 export type Periodo = { de: string; ate: string };
@@ -25,23 +26,100 @@ function somaDias(s: string, n: number) {
 }
 const diasEntre = (a: string, b: string) => Math.round((dia(b).getTime() - dia(a).getTime()) / 864e5) + 1;
 
-export type ChavePeriodo = '7d' | '30d' | 'mes' | 'custom';
+export const PERIODOS = [
+  ['hoje', 'Hoje'],
+  ['semana', 'Esta semana'],
+  ['semana_anterior', 'Semana anterior'],
+  ['7d', 'Últimos 7 dias'],
+  ['30d', 'Últimos 30 dias'],
+  ['mes', 'Este mês'],
+  ['mes_anterior', 'Último mês'],
+  ['ano', 'Este ano'],
+  ['max', 'Máximo'],
+  ['custom', 'Personalizado'],
+] as const;
 
-// Períodos fechados em ONTEM: hoje ainda está acumulando e puxaria a média
-// para baixo. O "mês atual" é a exceção: vai até hoje, como o Gerenciador.
-export function resolverPeriodo(chave: string | undefined, hoje: string, de?: string, ate?: string): Periodo & { chave: ChavePeriodo } {
+export type ChavePeriodo = (typeof PERIODOS)[number][0];
+
+const DATA = /^\d{4}-\d{2}-\d{2}$/;
+
+// Semana começa na SEGUNDA. getUTCDay: 0 = domingo.
+function segundaDaSemana(s: string) {
+  const dow = dia(s).getUTCDay();
+  return somaDias(s, -((dow + 6) % 7));
+}
+
+function ultimoDiaDoMes(anoMes: string) {
+  const [a, m] = anoMes.split('-').map(Number);
+  return iso(new Date(Date.UTC(a, m, 0, 12)));
+}
+
+function mesAnterior(anoMes: string) {
+  const [a, m] = anoMes.split('-').map(Number);
+  return m === 1 ? `${a - 1}-12` : `${a}-${String(m - 1).padStart(2, '0')}`;
+}
+
+// "Últimos N dias" fecham em ONTEM: hoje ainda está acumulando e puxaria a média
+// para baixo. Os períodos de calendário ("esta semana", "este mês", "este ano")
+// vão até hoje, como no Gerenciador. "Máximo" começa no primeiro dia com dado.
+export function resolverPeriodo(
+  chave: string | undefined, hoje: string, de?: string, ate?: string, inicioDados?: string,
+): Periodo & { chave: ChavePeriodo } {
   const ontem = somaDias(hoje, -1);
-  if (chave === 'custom' && de && ate && /^\d{4}-\d{2}-\d{2}$/.test(de) && /^\d{4}-\d{2}-\d{2}$/.test(ate) && de <= ate) {
-    return { chave: 'custom', de, ate };
+  switch (chave) {
+    case 'custom':
+      if (de && ate && DATA.test(de) && DATA.test(ate) && de <= ate) return { chave, de, ate };
+      break;
+    case 'hoje':
+      return { chave, de: hoje, ate: hoje };
+    case 'semana':
+      return { chave, de: segundaDaSemana(hoje), ate: hoje };
+    case 'semana_anterior': {
+      const seg = somaDias(segundaDaSemana(hoje), -7);
+      return { chave, de: seg, ate: somaDias(seg, 6) };
+    }
+    case '30d':
+      return { chave, de: somaDias(ontem, -29), ate: ontem };
+    case 'mes':
+      return { chave, de: `${hoje.slice(0, 8)}01`, ate: hoje };
+    case 'mes_anterior': {
+      const m = mesAnterior(hoje.slice(0, 7));
+      return { chave, de: `${m}-01`, ate: ultimoDiaDoMes(m) };
+    }
+    case 'ano':
+      return { chave, de: `${hoje.slice(0, 4)}-01-01`, ate: hoje };
+    case 'max':
+      return { chave, de: inicioDados && inicioDados <= hoje ? inicioDados : hoje, ate: hoje };
   }
-  if (chave === '30d') return { chave: '30d', de: somaDias(ontem, -29), ate: ontem };
-  if (chave === 'mes') return { chave: 'mes', de: `${hoje.slice(0, 8)}01`, ate: hoje };
   return { chave: '7d', de: somaDias(ontem, -6), ate: ontem };
 }
 
-// Mesmo número de dias, imediatamente antes.
-export function periodoAnterior(p: Periodo): Periodo {
+// Período de comparação. Calendário compara com o MESMO trecho do anterior
+// (esta semana até quarta × semana passada até quarta), para não comparar 3
+// dias com 7. "Máximo" não tem anterior: as variações ficam em "—".
+export function periodoAnterior(p: Periodo & { chave?: string }): Periodo | null {
   const n = diasEntre(p.de, p.ate);
+  switch (p.chave) {
+    case 'max':
+      return null;
+    case 'semana':
+    case 'semana_anterior':
+      return { de: somaDias(p.de, -7), ate: somaDias(p.ate, -7) };
+    case 'mes':
+    case 'mes_anterior': {
+      const m = mesAnterior(p.de.slice(0, 7));
+      const fim = ultimoDiaDoMes(m);
+      // Mês corrente até dia 31 × mês anterior de 30 dias: corta no último dia dele.
+      const ate = p.chave === 'mes_anterior' ? fim : `${m}-${p.ate.slice(8)}` > fim ? fim : `${m}-${p.ate.slice(8)}`;
+      return { de: `${m}-01`, ate };
+    }
+    case 'ano': {
+      const a = Number(p.de.slice(0, 4)) - 1;
+      // 29/02 em ano bissexto vira 28/02 no ano anterior.
+      const ate = p.ate.slice(5) === '02-29' ? `${a}-02-28` : `${a}-${p.ate.slice(5)}`;
+      return { de: `${a}-01-01`, ate };
+    }
+  }
   return { de: somaDias(p.de, -n), ate: somaDias(p.de, -1) };
 }
 
@@ -61,7 +139,10 @@ export type Totais = {
   cpc: number | null;
   cpm: number | null;
   leads: number | null;
+  cpl: number | null;
   conversas: number | null;
+  taxa_conversao: number | null; // leads ÷ cliques, em %
+  parcela_impressoes: number | null; // em %
 };
 
 // Soma que fica nula se NENHUMA linha tem o valor: "—" e 0 dizem coisas diferentes.
@@ -72,6 +153,20 @@ function somaOpcional(linhas: LinhaMetrica[], campo: 'alcance' | 'leads' | 'conv
 
 const div = (a: number, b: number) => (b ? a / b : null);
 
+// Parcela de impressões do período = impressões ganhas ÷ impressões possíveis.
+// Possíveis de cada dia = impressões ÷ parcela do dia. Média simples das
+// parcelas daria o mesmo peso a um dia de 2 impressões e a um de 200.
+function parcelaPonderada(linhas: LinhaMetrica[]): number | null {
+  let ganhas = 0;
+  let possiveis = 0;
+  for (const l of linhas) {
+    if (!l.parcela_impressoes || !l.impressoes) continue;
+    ganhas += Number(l.impressoes);
+    possiveis += Number(l.impressoes) / Number(l.parcela_impressoes);
+  }
+  return possiveis ? (ganhas / possiveis) * 100 : null;
+}
+
 export function totais(linhas: LinhaMetrica[]): Totais {
   const investimento = linhas.reduce((s, l) => s + Number(l.investimento), 0);
   const impressoes = linhas.reduce((s, l) => s + Number(l.impressoes), 0);
@@ -80,6 +175,7 @@ export function totais(linhas: LinhaMetrica[]): Totais {
   // dois dias conta duas vezes, então isto superestima o alcance do período e
   // subestima a frequência. O número exato exige outra consulta à Meta.
   const alcance = somaOpcional(linhas, 'alcance');
+  const leads = somaOpcional(linhas, 'leads');
   return {
     investimento,
     impressoes,
@@ -91,7 +187,11 @@ export function totais(linhas: LinhaMetrica[]): Totais {
     ctr: div(cliques * 100, impressoes),
     cpc: div(investimento, cliques),
     cpm: div(investimento * 1000, impressoes),
-    leads: somaOpcional(linhas, 'leads'),
+    leads,
+    // Custo por lead: nulo sem leads (dividir por zero não é "R$ 0").
+    cpl: leads ? investimento / leads : null,
+    taxa_conversao: leads != null && cliques ? (leads * 100) / cliques : null,
+    parcela_impressoes: parcelaPonderada(linhas),
     conversas: somaOpcional(linhas, 'conversas'),
   };
 }

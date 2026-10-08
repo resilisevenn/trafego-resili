@@ -42,6 +42,9 @@ create table trafego.contas_anuncio (
   fuso text not null default 'America/Sao_Paulo',
   -- Nulo = sem alerta de saldo para esta conta.
   limite_alerta_saldo numeric(12,2),
+  -- Combinados com o cliente. Nulos = sem alerta de ritmo / sem semáforo de meta.
+  verba_mensal numeric(12,2),
+  cpl_meta numeric(12,2),
   ativa boolean not null default true,
   criado_em timestamptz not null default now(),
   unique (plataforma, conta_id),
@@ -96,6 +99,9 @@ create table trafego.metricas_diarias (
   cpm numeric(12,4),
   leads numeric(12,2),
   conversas numeric(12,2),
+  -- Só Google, só campanha de pesquisa: fração (0 a 1) das impressões possíveis
+  -- que a campanha ganhou. Não soma entre dias: o painel pondera por impressões.
+  parcela_impressoes numeric(7,4),
   -- Resposta original: permite criar métricas novas sem coletar de novo.
   bruto jsonb not null default '{}',
   atualizado_em timestamptz not null default now(),
