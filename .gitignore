@@ -1,0 +1,7 @@
+.env*
+!.env.example
+saida/
+__pycache__/
+node_modules/
+.next/
+.claude/settings.local.json
