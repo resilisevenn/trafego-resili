@@ -19,6 +19,7 @@ async function dbAdmin() {
 function ok(error: { message: string } | null) {
   if (error) throw new Error(error.message);
   revalidatePath('/config');
+  revalidatePath('/admin');
   revalidatePath('/');
   revalidatePath('/conta');
 }

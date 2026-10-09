@@ -8,6 +8,9 @@ export default async function AppLayout({ children }: LayoutProps<'/'>) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) redirect('/login');
+  // Senha provisória (criada no /admin): troca antes de ver qualquer tela.
+  // app_metadata só a service_role escreve; o usuário não consegue se liberar.
+  if (user.app_metadata?.trocar_senha) redirect('/trocar-senha');
 
   const { data: papel } = await supabase
     .from('user_roles')

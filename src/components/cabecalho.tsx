@@ -18,7 +18,7 @@ export function Cabecalho({ base = '', email, admin, sair }: {
   const links = [
     { href: inicio, rotulo: 'Visão geral' },
     { href: `${base}/conta`, rotulo: 'Por conta' },
-    ...(admin ? [{ href: `${base}/config`, rotulo: 'Configuração' }] : []),
+    ...(admin ? [{ href: `${base}/config`, rotulo: 'Configuração' }, { href: `${base}/admin`, rotulo: 'Admin' }] : []),
   ];
 
   return (
@@ -45,6 +45,8 @@ export function Cabecalho({ base = '', email, admin, sair }: {
         </nav>
         <div className="ml-auto flex items-center gap-3">
           <span className="text-sm text-muted">{email}</span>
+          {/* A prévia local não tem a troca de senha. */}
+          {!base && <Link href="/trocar-senha" className="text-sm text-faint hover:text-foreground">Minha senha</Link>}
           {sair}
         </div>
       </div>

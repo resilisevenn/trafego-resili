@@ -1,19 +1,18 @@
-// Configuração (só admin): clientes, contas, acesso dos gestores e relatório.
+// Configuração (só admin): clientes, contas e relatório. Usuários e o acesso
+// de cada gestor às contas ficam no /admin (BRIEFING-ADMIN.md).
 // BRIEFING, seção 10. Formulários simples com server actions, um por bloco,
 // para uma alteração não arrastar as outras.
 
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
 import { buscarTodas } from '@/lib/supabase/paginar';
-import { alternarCliente, buscarContasAgora, criarCliente, excluirCliente, salvarAcesso, salvarConta, salvarRelatorio } from './acoes';
+import { alternarCliente, buscarContasAgora, criarCliente, excluirCliente, salvarConta, salvarRelatorio } from './acoes';
 import { LinhaConta } from '@/components/linha-conta';
 import { ExcluirCliente } from '@/components/excluir-cliente';
 import { BotaoAcao } from '@/components/botao-acao';
 import type { InfoSaldo } from '@/lib/painel/saldo';
 import { CardRelatorio } from '@/components/card-relatorio';
 import { FiltroPlataforma, lerFiltro } from '@/components/filtro-plataforma';
-
-const PLATAFORMA = { meta: 'Meta', google: 'Google' } as Record<string, string>;
 
 // O botão "Buscar contas novas" coleta todas as contas nesta requisição.
 export const maxDuration = 300;
@@ -32,15 +31,13 @@ export default async function ConfigPage({ searchParams }: Props) {
   if (!admin) redirect('/');
 
   const db = supabase.schema('trafego');
-  const [clientesR, contasR, acessosR, configR, campanhasR, gestoresR, saldosR] = await Promise.all([
+  const [clientesR, contasR, configR, campanhasR, saldosR] = await Promise.all([
     db.from('clientes').select('id, nome, ativo').order('nome'),
     db.from('contas_anuncio').select('id, nome, plataforma, conta_id, cliente_id, alerta_saldo_dias, verba_mensal, cpl_meta, ativa').order('plataforma').order('nome'),
-    db.from('acesso_conta').select('user_id, conta_anuncio_id'),
     db.from('relatorio_config').select('conta_anuncio_id, incluir, metricas, campanhas'),
     // Paginado: somando todas as contas, as campanhas passam de 1000 com o tempo.
     buscarTodas((de, ate) => db.from('campanhas').select('conta_anuncio_id, campanha_id, nome, status')
       .order('nome').order('conta_anuncio_id').order('campanha_id').range(de, ate)),
-    db.rpc('listar_gestores'),
     // Fonte da última foto de saldo: diz se a conta TEM saldo para alertar.
     db.from('saldo_conta').select('conta_anuncio_id, fonte, saldo, teto, data').order('data', { ascending: false }).limit(500),
   ]);
@@ -56,11 +53,9 @@ export default async function ConfigPage({ searchParams }: Props) {
       fonte: s.fonte, saldo: s.saldo == null ? null : Number(s.saldo), teto: s.teto == null ? null : Number(s.teto),
     });
   }
-  const gestores = (gestoresR.data ?? []) as { user_id: string; email: string }[];
-  const acessos = acessosR.data ?? [];
   const configs = new Map((configR.data ?? []).map((c) => [c.conta_anuncio_id, c]));
   const campanhasDa = (id: string) => campanhasR.filter((c) => c.conta_anuncio_id === id);
-  const erro = [clientesR, contasR, acessosR, configR, gestoresR].find((r) => r.error)?.error;
+  const erro = [clientesR, contasR, configR].find((r) => r.error)?.error;
 
   // Chave = id + valores salvos. O React 19 reseta o formulário depois de cada
   // ação para os valores INICIAIS da tela; sem isto, a linha recém-salva voltava
@@ -142,35 +137,6 @@ export default async function ConfigPage({ searchParams }: Props) {
               ))}
             </tbody>
           </table>
-        </div>
-      </Secao>
-
-      {/* ── Acesso dos gestores ── */}
-      <Secao titulo="Acesso dos gestores" ajuda="O gestor só vê as contas marcadas aqui. Quem barra é o banco, não a tela.">
-        {!gestores.length && (
-          <p className="text-sm text-muted">
-            Nenhum gestor cadastrado. Crie o usuário no Supabase e dê o papel &quot;gestor&quot; em user_roles.
-          </p>
-        )}
-        <div className="flex flex-col gap-4">
-          {gestores.map((g) => {
-            const dele = new Set(acessos.filter((a) => a.user_id === g.user_id).map((a) => a.conta_anuncio_id));
-            return (
-              <form key={versao(g.user_id, [...dele].sort())} action={salvarAcesso} className="card p-4">
-                <input type="hidden" name="user_id" value={g.user_id} />
-                <div className="font-medium text-sm mb-3">{g.email}</div>
-                <div className="grid gap-1 sm:grid-cols-2 lg:grid-cols-3 text-sm">
-                  {contas.map((c) => (
-                    <label key={c.id} className="flex items-center gap-2">
-                      <input type="checkbox" name="contas" value={c.id} defaultChecked={dele.has(c.id)} />
-                      <span>{c.nome} <span className="text-faint">({PLATAFORMA[c.plataforma]})</span></span>
-                    </label>
-                  ))}
-                </div>
-                <button className="btn mt-3" type="submit">Salvar acesso</button>
-              </form>
-            );
-          })}
         </div>
       </Secao>
 
