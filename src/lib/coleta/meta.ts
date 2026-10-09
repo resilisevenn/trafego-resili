@@ -29,6 +29,9 @@ export const TIPOS_CONVERSA = [
 ];
 
 type Acao = { action_type: string; value: string };
+// "Resultados" do Gerenciador: a Meta escolhe o indicador pelo objetivo da
+// campanha (ex.: profile_visit_view numa campanha de tráfego para o Instagram).
+type Resultado = { indicator: string; values?: { value: string }[] };
 
 export type LinhaInsight = {
   campaign_id: string;
@@ -44,6 +47,7 @@ export type LinhaInsight = {
   cpc?: string;
   cpm?: string;
   actions?: Acao[];
+  results?: Resultado[];
 };
 
 export type ContaMeta = {
@@ -71,6 +75,8 @@ export type Metrica = {
   cpm: number | null;
   leads: number | null;
   conversas: number | null;
+  resultado: number | null;
+  resultado_tipo: string | null;
   parcela_impressoes: null; // métrica só do Google
   bruto: LinhaInsight;
 };
@@ -95,6 +101,15 @@ function primeiraAcao(acoes: Acao[] | undefined, tipos: string[]): number | null
   return null;
 }
 
+// Primeiro indicador com valor. Sem resultado no dia: nulo (não zero), como leads.
+export function resultadoDe(rs: Resultado[] | undefined) {
+  const r = rs?.find((x) => x.values?.length);
+  const v = r?.values?.[0]?.value;
+  return v == null || v === ''
+    ? { resultado: null, resultado_tipo: null }
+    : { resultado: Number(v), resultado_tipo: r!.indicator };
+}
+
 export function paraMetrica(l: LinhaInsight): Metrica {
   return {
     campanha_id: l.campaign_id,
@@ -111,6 +126,7 @@ export function paraMetrica(l: LinhaInsight): Metrica {
     // omite quando a campanha nem rastreia aquilo. Zero afirmaria demais.
     leads: primeiraAcao(l.actions, TIPOS_LEAD),
     conversas: primeiraAcao(l.actions, TIPOS_CONVERSA),
+    ...resultadoDe(l.results),
     parcela_impressoes: null,
     bruto: l,
   };
@@ -211,7 +227,7 @@ export function listarCampanhas(contaId: string, token: string): Promise<Campanh
 }
 
 const CAMPOS_INSIGHT =
-  'campaign_id,campaign_name,objective,spend,impressions,reach,frequency,clicks,ctr,cpc,cpm,actions';
+  'campaign_id,campaign_name,objective,spend,impressions,reach,frequency,clicks,ctr,cpc,cpm,actions,results';
 
 export function buscarInsights(
   contaId: string,
@@ -227,4 +243,23 @@ export function buscarInsights(
     access_token: token,
   });
   return paginado<LinhaInsight>(`${GRAPH}/act_${contaId}/insights?${p}`);
+}
+
+// Alcance do PERÍODO inteiro por campanha, sem time_increment: a Meta conta
+// pessoas únicas na janela. A soma dos alcances diários conta a mesma pessoa
+// uma vez por dia (relatório 17.518 × Gerenciador 12.372 em 02 a 08/10/2026).
+export async function buscarAlcancePeriodo(
+  contaId: string,
+  token: string,
+  periodo: { since: string; until: string },
+): Promise<{ campanha_id: string; alcance: number | null }[]> {
+  const p = new URLSearchParams({
+    level: 'campaign',
+    fields: 'campaign_id,reach',
+    time_range: JSON.stringify(periodo),
+    limit: '500',
+    access_token: token,
+  });
+  const linhas = await paginado<{ campaign_id: string; reach?: string }>(`${GRAPH}/act_${contaId}/insights?${p}`);
+  return linhas.map((l) => ({ campanha_id: l.campaign_id, alcance: num(l.reach) }));
 }

@@ -7,10 +7,10 @@
 
 import { useActionState, useState } from 'react';
 import { LogoPlataforma } from '@/components/logo-plataforma';
-import { METRICAS_RELATORIO } from '@/lib/painel/metricas';
+import { metricasDa } from '@/lib/painel/metricas';
+import { fmtStatus } from '@/lib/painel/formato';
 
 const PLATAFORMA: Record<string, string> = { meta: 'Meta', google: 'Google' };
-const TODAS_METRICAS = METRICAS_RELATORIO.map(([chave]) => chave as string);
 
 const mesmoConjunto = (a: Set<string>, b: Set<string>) => a.size === b.size && [...a].every((x) => b.has(x));
 
@@ -21,9 +21,13 @@ export function CardRelatorio({ conta, config, campanhas, acao }: {
   campanhas: { campanha_id: string; nome: string; status: string | null }[];
   acao: (form: FormData) => Promise<void>;
 }) {
+  const opcoes = metricasDa(conta.plataforma);
+  const TODAS_METRICAS = opcoes.map(([chave]) => chave as string);
   const inicial = {
     incluir: config?.incluir ?? true,
-    metricas: new Set(config?.metricas ?? TODAS_METRICAS),
+    // Só as da plataforma: uma escolha antiga com métrica que a plataforma não tem
+    // não conta no "x de y" nem volta ao banco no próximo salvar.
+    metricas: new Set((config?.metricas ?? TODAS_METRICAS).filter((m) => TODAS_METRICAS.includes(m))),
     campanhas: new Set(config?.campanhas ?? campanhas.map((k) => k.campanha_id)),
   };
   const [incluir, setIncluir] = useState(inicial.incluir);
@@ -60,6 +64,7 @@ export function CardRelatorio({ conta, config, campanhas, acao }: {
     >
       <input type="hidden" name="conta_id" value={conta.id} />
       <input type="hidden" name="total_campanhas" value={campanhas.length} />
+      <input type="hidden" name="total_metricas" value={TODAS_METRICAS.length} />
 
       {/* Linha sempre visível: abrir/fechar, incluir, nome, resumo e Salvar. */}
       <div className="flex flex-wrap items-center gap-x-3 gap-y-2 p-4">
@@ -100,7 +105,7 @@ export function CardRelatorio({ conta, config, campanhas, acao }: {
       <div hidden={!aberto} className="border-t border-border px-4 pb-4 pl-12">
         <div className="label mt-3">Métricas</div>
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
-          {METRICAS_RELATORIO.map(([chave, rotulo]) => (
+          {opcoes.map(([chave, rotulo]) => (
             <label key={chave} className="flex items-center gap-1">
               <input
                 type="checkbox" name="metricas" value={chave}
@@ -120,7 +125,7 @@ export function CardRelatorio({ conta, config, campanhas, acao }: {
                 type="checkbox" name="campanhas" value={k.campanha_id}
                 checked={marcadas.has(k.campanha_id)} onChange={() => alternar(marcadas, setMarcadas, k.campanha_id)}
               />
-              {k.nome} <span className="text-xs text-faint">{k.status}</span>
+              {k.nome} <span className="text-xs text-faint">{fmtStatus(k.status)}</span>
             </label>
           ))}
         </div>

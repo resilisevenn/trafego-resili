@@ -12,9 +12,9 @@ export const LIMITES = {
   saldoDiasPadrao: 3,
   // "Parou": gasto zero ontem numa conta que gastava pelo menos isto por dia.
   gastoMinimoParaParada: 5,
-  // CPL dos últimos 7 dias acima de (1 + x) × CPL das 4 semanas anteriores.
+  // Custo por resultado dos últimos 7 dias acima de (1 + x) × o das 4 semanas anteriores.
   cplAlta: 0.3,
-  leadsMinimosParaCpl: 3,
+  leadsMinimosParaCpl: 3, // mínimo de resultados (leads ou conversas)
   frequenciaFadiga: 3,
   // Projeção do mês contra a verba combinada.
   ritmoAcima: 0.1,
@@ -100,10 +100,15 @@ export function saude(c: Contexto): Saude {
   }
 
   // CPL
-  const cplSemana = tSemana.leads != null && tSemana.leads >= LIMITES.leadsMinimosParaCpl ? tSemana.cpl : null;
+  // Custo por RESULTADO (lead; ou conversa nas contas de mensagem). Só compara
+  // semana × base quando o resultado é do mesmo tipo nos dois e há volume mínimo.
   const t4 = totais(quatroAntes);
-  const cplBase = t4.leads != null && t4.leads >= LIMITES.leadsMinimosParaCpl ? t4.cpl : null;
-  const rotuloCpl = c.plataforma === 'google' ? 'Custo por conversão' : 'CPL';
+  const comVolume = (t: typeof tSemana) =>
+    t.resultados != null && t.resultados >= LIMITES.leadsMinimosParaCpl ? t.custo_resultado : null;
+  const cplSemana = comVolume(tSemana);
+  const cplBase = t4.tipo_resultado === tSemana.tipo_resultado ? comVolume(t4) : null;
+  const rotuloCpl = c.plataforma === 'google' ? 'Custo por conversão'
+    : tSemana.tipo_resultado === 'conversa' ? 'Custo por conversa' : 'CPL';
   if (cplSemana != null && cplBase != null && cplSemana > cplBase * (1 + LIMITES.cplAlta)) {
     add('atencao', 'cpl', `${rotuloCpl} ${Math.round((cplSemana / cplBase - 1) * 100)}% acima das 4 semanas anteriores`);
   }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { paraMetrica, paraSaldo, saldoDoTexto, type ContaMeta, type LinhaInsight } from './meta';
+import { paraMetrica, paraSaldo, resultadoDe, saldoDoTexto, type ContaMeta, type LinhaInsight } from './meta';
 
 const base: LinhaInsight = {
   campaign_id: '1',
@@ -101,4 +101,16 @@ describe('saldoDoTexto', () => {
     ['R$ 50', 50],
   ])('%s → %s', (texto, v) => expect(saldoDoTexto(texto)).toBe(v));
   it('sem R$: nulo', () => expect(saldoDoTexto('Visa *1234')).toBeNull());
+});
+
+describe('resultadoDe', () => {
+  it('lê o número e o indicador do Gerenciador', () => {
+    // VP INSTA, 02 a 08/10/2026: 266 visitas ao perfil, como no Gerenciador.
+    expect(resultadoDe([{ indicator: 'profile_visit_view', values: [{ value: '266' }] }]))
+      .toEqual({ resultado: 266, resultado_tipo: 'profile_visit_view' });
+  });
+  it('sem resultado é nulo, não zero', () => {
+    expect(resultadoDe(undefined)).toEqual({ resultado: null, resultado_tipo: null });
+    expect(resultadoDe([{ indicator: 'x', values: [] }])).toEqual({ resultado: null, resultado_tipo: null });
+  });
 });

@@ -86,8 +86,8 @@ export function VisaoGeral({ linhas, hrefConta, periodo, rotuloPeriodo, hrefPeri
             <tr className="border-b border-border">
               <th className="text-left p-3 font-medium">Clínica / conta</th>
               <th className="p-3 font-medium">Investimento</th>
-              <th className="p-3 font-medium">Leads / conv.</th>
-              <th className="p-3 font-medium">CPL</th>
+              <th className="p-3 font-medium">Resultados</th>
+              <th className="p-3 font-medium" title="Custo por lead quando a conta tem leads; custo por conversa nas contas de mensagem.">Custo/resultado</th>
               <th className="p-3 font-medium">Saldo</th>
               <th className="p-3 font-medium">Verba do mês</th>
               <th className="text-left p-3 font-medium">Alertas</th>
@@ -113,12 +113,23 @@ export function VisaoGeral({ linhas, hrefConta, periodo, rotuloPeriodo, hrefPeri
                     <Var v={n.anterior && variacao(n.atual.investimento, n.anterior.investimento)} neutro />
                   </td>
                   <td className="p-3">
-                    <div>{fmtContagem(n.atual.leads)}</div>
-                    <Var v={n.anterior && variacao(n.atual.leads, n.anterior.leads)} />
+                    <div>{fmtContagem(n.atual.resultados)}</div>
+                    <Var
+                      v={n.anterior && n.anterior.tipo_resultado === n.atual.tipo_resultado
+                        ? variacao(n.atual.resultados, n.anterior.resultados) : null}
+                    />
                   </td>
                   <td className="p-3">
-                    <div>{fmtMoeda(n.atual.cpl)}</div>
-                    <Var v={n.anterior && variacao(n.atual.cpl, n.anterior.cpl)} menorMelhor />
+                    <div>{fmtMoeda(n.atual.custo_resultado)}</div>
+                    {n.atual.tipo_resultado && (
+                      <div className="text-[11px] text-faint">por {n.atual.tipo_resultado}</div>
+                    )}
+                    {/* Só compara se o resultado é do mesmo tipo nos dois períodos. */}
+                    <Var
+                      v={n.anterior && n.anterior.tipo_resultado === n.atual.tipo_resultado
+                        ? variacao(n.atual.custo_resultado, n.anterior.custo_resultado) : null}
+                      menorMelhor
+                    />
                   </td>
                   <td className="p-3">
                     <CelulaSaldo linha={l} />

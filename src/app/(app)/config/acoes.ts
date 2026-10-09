@@ -6,7 +6,6 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
-import { METRICAS_RELATORIO } from '@/lib/painel/metricas';
 import { lerReais } from '@/lib/painel/formato';
 import { sincronizar } from '@/lib/coleta/sincronizar';
 
@@ -96,12 +95,13 @@ export async function salvarRelatorio(form: FormData) {
   const metricas = form.getAll('metricas').map(String);
   const campanhas = form.getAll('campanhas').map(String);
   const totalCampanhas = Number(form.get('total_campanhas'));
+  const totalMetricas = Number(form.get('total_metricas'));
   const db = await dbAdmin();
   ok((await db.from('relatorio_config').upsert({
     conta_anuncio_id: contaId,
     incluir: form.get('incluir') === 'on',
     // Tudo marcado = nulo = "todas", inclusive as que surgirem depois.
-    metricas: metricas.length === METRICAS_RELATORIO.length ? null : metricas,
+    metricas: metricas.length === totalMetricas ? null : metricas,
     campanhas: campanhas.length === totalCampanhas ? null : campanhas,
     atualizado_em: new Date().toISOString(),
   })).error);

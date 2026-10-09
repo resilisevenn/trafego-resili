@@ -10,7 +10,7 @@
 
 import 'server-only';
 import { createAdminClient } from '@/lib/supabase/admin';
-import { hojeNoFuso, janela } from '@/lib/coleta/datas';
+import { hojeNoFuso, janela, semanaFechada } from '@/lib/coleta/datas';
 import * as meta from '@/lib/coleta/meta';
 import * as google from '@/lib/coleta/google';
 
@@ -42,9 +42,11 @@ async function coletarMeta(db: Db, apenas?: Set<string>) {
       const uuid = ids.get(c.account_id);
       if (!uuid || (apenas && !apenas.has(uuid))) continue;
       resumo[c.name] = await comLog(db, 'meta', uuid, async () => {
-        const [campanhas, insights, financiamento] = await Promise.all([
+        const semana = semanaFechada(c.timezone_name);
+        const [campanhas, insights, alcance, financiamento] = await Promise.all([
           meta.listarCampanhas(c.account_id, token),
           meta.buscarInsights(c.account_id, token, janela(c.timezone_name)),
+          meta.buscarAlcancePeriodo(c.account_id, token, semana),
           // Crédito do boleto/Pix: só para pré-paga (exige permissão de gerenciar).
           c.is_prepay_account ? meta.buscarFinanciamento(c.account_id, token) : Promise.resolve(null),
         ]);
@@ -55,6 +57,7 @@ async function coletarMeta(db: Db, apenas?: Set<string>) {
             ...insights.map((l) => ({ id: l.campaign_id, nome: l.campaign_name, status: 'DESCONHECIDO', objetivo: l.objective })),
           ],
           metricas: insights.map(meta.paraMetrica),
+          alcanceSemana: alcance.map((x) => ({ ...x, inicio: semana.since, fim: semana.until })),
           saldo: { data: hojeNoFuso(c.timezone_name), ...meta.paraSaldo(c, financiamento) },
         });
       });
@@ -133,6 +136,8 @@ async function registrarContas(
 type DadosConta = {
   campanhas: { id: string; nome: string; status: string; objetivo?: string }[];
   metricas: { campanha_id: string; data: string }[];
+  // Só Meta: alcance real da semana fechada (o Google não expõe alcance).
+  alcanceSemana?: { campanha_id: string; inicio: string; fim: string; alcance: number | null }[];
   saldo: { data: string; saldo: number | null; teto: number | null; tipo_pagamento: string; fonte: string; bruto: unknown };
 };
 
@@ -157,6 +162,16 @@ async function gravarConta(db: Db, uuid: string, d: DadosConta) {
     await falhaSe(db.from('metricas_diarias').upsert(
       d.metricas.map((m) => ({ conta_anuncio_id: uuid, ...m, atualizado_em: agora })),
       { onConflict: 'conta_anuncio_id,campanha_id,data' },
+    ));
+  }
+
+  // Depois das métricas: a campanha da semana pode só existir via insights,
+  // e alcance_semana tem FK para campanhas (gravadas acima).
+  const semana = (d.alcanceSemana ?? []).filter((x) => campanhas.has(x.campanha_id));
+  if (semana.length) {
+    await falhaSe(db.from('alcance_semana').upsert(
+      semana.map((x) => ({ conta_anuncio_id: uuid, ...x, atualizado_em: agora })),
+      { onConflict: 'conta_anuncio_id,campanha_id,inicio,fim' },
     ));
   }
 

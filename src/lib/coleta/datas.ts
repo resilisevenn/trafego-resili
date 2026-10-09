@@ -10,6 +10,18 @@ export function hojeNoFuso(fuso: string, agora = new Date()): string {
   return new Intl.DateTimeFormat('en-CA', { timeZone: fuso }).format(agora);
 }
 
+// Semana fechada: os 7 dias ANTES de hoje (ontem incluído, hoje não). É a
+// mesma semana que o relatório de segunda lê (relatorio_semanal: ref-7 a ref-1).
+export function semanaFechada(fuso: string, agora = new Date()): { since: string; until: string } {
+  const hoje = new Date(`${hojeNoFuso(fuso, agora)}T12:00:00Z`);
+  const dia = (n: number) => {
+    const d = new Date(hoje);
+    d.setUTCDate(d.getUTCDate() - n);
+    return d.toISOString().slice(0, 10);
+  };
+  return { since: dia(7), until: dia(1) };
+}
+
 export function janela(fuso: string, agora = new Date()): { since: string; until: string } {
   const until = hojeNoFuso(fuso, agora);
   const d = new Date(`${until}T12:00:00Z`);

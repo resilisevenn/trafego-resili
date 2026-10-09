@@ -32,3 +32,15 @@ export function lerReais(texto: string): number | null {
   else normal = v.replace(/\./g, '');
   return /^\d+(\.\d+)?$/.test(normal) ? Number(normal) : NaN;
 }
+
+// Status da campanha chega em inglês da API (Google: campaign.status; Meta:
+// effective_status). Na tela, português. Desconhecido passa como veio.
+const STATUS: Record<string, string> = {
+  ENABLED: 'Ativa', ACTIVE: 'Ativa',
+  PAUSED: 'Pausada', CAMPAIGN_PAUSED: 'Pausada', ADSET_PAUSED: 'Pausada',
+  REMOVED: 'Removida', DELETED: 'Excluída', ARCHIVED: 'Arquivada',
+  IN_PROCESS: 'Em processamento', PENDING_REVIEW: 'Em análise',
+  DISAPPROVED: 'Reprovada', WITH_ISSUES: 'Com problemas',
+  DESCONHECIDO: 'Status desconhecido',
+};
+export const fmtStatus = (s: string | null | undefined) => (s ? STATUS[s] ?? s : '');

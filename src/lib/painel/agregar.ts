@@ -156,6 +156,13 @@ export type Totais = {
   leads: number | null;
   cpl: number | null;
   conversas: number | null;
+  custo_conversa: number | null; // investimento ÷ conversas
+  // "Resultado" da conta: o LEAD quando houver leads; senão a CONVERSA (contas de
+  // mensagem). Decisão de 09/10/2026: lead é o principal quando há os dois.
+  // Visão geral, alertas e a meta de custo usam este par.
+  tipo_resultado: 'lead' | 'conversa' | null;
+  resultados: number | null;
+  custo_resultado: number | null;
   taxa_conversao: number | null; // leads ÷ cliques, em %
   parcela_impressoes: number | null; // em %
 };
@@ -191,6 +198,9 @@ export function totais(linhas: LinhaMetrica[]): Totais {
   // subestima a frequência. O número exato exige outra consulta à Meta.
   const alcance = somaOpcional(linhas, 'alcance');
   const leads = somaOpcional(linhas, 'leads');
+  const conversas = somaOpcional(linhas, 'conversas');
+  const tipo = leads ? 'lead' : conversas ? 'conversa' : null;
+  const resultados = tipo === 'lead' ? leads : tipo === 'conversa' ? conversas : null;
   return {
     investimento,
     impressoes,
@@ -207,7 +217,11 @@ export function totais(linhas: LinhaMetrica[]): Totais {
     cpl: leads ? investimento / leads : null,
     taxa_conversao: leads != null && cliques ? (leads * 100) / cliques : null,
     parcela_impressoes: parcelaPonderada(linhas),
-    conversas: somaOpcional(linhas, 'conversas'),
+    conversas,
+    custo_conversa: conversas ? investimento / conversas : null,
+    tipo_resultado: tipo,
+    resultados,
+    custo_resultado: resultados ? investimento / resultados : null,
   };
 }
 

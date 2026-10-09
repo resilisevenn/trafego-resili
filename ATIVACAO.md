@@ -97,6 +97,29 @@ UazAPI. Ficam nas credenciais do n8n, não nos nós.
    - Mesmo contrato do `send-whatsapp-group` do Clinic 360.
    - Espaçar os envios em alguns segundos.
 
+### Grupos de WhatsApp — qual cliente vai para qual grupo
+
+Fluxo no n8n: **"Tráfego — Relatório de Segunda"** (id `6U94jqqGPCyxwMnp`).
+O destino é escolhido pelo `cliente_id` no Body do nó **"Enviar no grupo (UazAPI)"**
+(o envio de segunda). Cliente que não está na lista do grupo Jackson cai no grupo [R7].
+O caminho de teste (**"Teste — Enviar no grupo"**) manda SEMPRE para o grupo Jackson,
+qualquer que seja o cliente filtrado: teste nunca chega ao [R7]. Os dois grupos usam a mesma instância
+UazAPI (credencial "Uazapi Jackson Resili"); o número dela precisa estar no grupo.
+
+| Grupo | ID | Clientes |
+|---|---|---|
+| Métricas Tráfego - Jackson | `120363412070605530@g.us` | Resili Sevenn (`ac862ac0-39f4-473c-b241-847d255672cc`), Dr Arlan Marques (`16d3d1aa-7ce4-4da5-bfc6-f306bb2f2e74`) |
+| Métricas Tráfego [R7] | `120363431628754765@g.us` | Todos os outros (padrão): Dr Anderson Esp. Santo, Dra Isadora Staciarini, Dra. Gabrielle Leão, RVF Odontologia, Santa Podóloga |
+
+O fluxo **"Tráfego — Alerta de Saldo"** (id `t5DDUeS0DEvoxS0h`, diário 07h) segue a
+mesma regra, no nó "Enviar no grupo (UazAPI)". Lá a escolha é pelo NOME do cliente
+(`alertas_saldo_pendentes()` não devolve `cliente_id`): renomear o cliente exige
+ajustar a lista. Chamar a função marca o aviso do dia como enviado: rodar o fluxo
+na mão consome o aviso daquele dia.
+
+Cliente novo entra no [R7] sozinho. Para mandar ao grupo Jackson, acrescentar o
+`cliente_id` dele (tabela `trafego.clientes`) à lista do nó de segunda e atualizar esta tabela.
+
 ### Alerta de saldo — gatilho: diário, 07h (depois da coleta das 06h)
 
 1. **HTTP Request** `POST {SUPABASE_URL}/rest/v1/rpc/alertas_saldo_pendentes`

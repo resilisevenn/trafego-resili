@@ -114,7 +114,7 @@ export default async function ConfigPage({ searchParams }: Props) {
             <FiltroPlataforma caminho="/config" parametro="plataforma" atual={filtro} params={params} />
           </div>
         }
-        ajuda="Contas novas entram sozinhas na coleta das 06h, ou na hora pelo botão ao lado. Ligue cada uma a um cliente. Verba e meta de CPL são os combinados com o cliente (vazio = sem alerta). O aviso de saldo é em dias: quanto o saldo dura no ritmo atual.">
+        ajuda="Contas novas entram sozinhas na coleta das 06h, ou na hora pelo botão ao lado. Ligue cada uma a um cliente. Verba e meta de custo por resultado são os combinados com o cliente (vazio = sem alerta). O aviso de saldo é em dias: quanto o saldo dura no ritmo atual.">
         <div className="card overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="text-xs text-muted text-left align-bottom">
@@ -123,7 +123,7 @@ export default async function ConfigPage({ searchParams }: Props) {
                 <th className="p-3 font-medium">Cliente</th>
                 <th className="p-3 font-medium" title="Quanto o cliente combinou de investir por mês. Base do alerta de ritmo da verba.">Verba mensal (R$)</th>
                 <th className="p-3 font-medium" title="Avisar quando o saldo (crédito do boleto ou o que falta até o teto de gastos) durar menos que estes dias, no ritmo dos últimos 7 dias. Alerta no painel e, com o n8n ligado, no WhatsApp.">Avisar com (dias)</th>
-                <th className="p-3 font-medium" title="CPL combinado com o cliente. Acima dele, alerta na visão geral.">Meta de CPL (R$)</th>
+                <th className="p-3 font-medium" title="Custo por resultado combinado com o cliente: por lead, ou por conversa nas contas de mensagem. Acima dele, alerta na visão geral.">Meta de custo/resultado (R$)</th>
                 <th className="p-3 font-medium">Ativa</th>
                 <th className="p-3" />
               </tr>

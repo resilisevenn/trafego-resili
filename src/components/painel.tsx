@@ -11,7 +11,7 @@ import {
   descreverPeriodo, porCampanha, seriePorDia, totais, variacao, type LinhaMetrica, type Periodo, type Totais,
 } from '@/lib/painel/agregar';
 import {
-  fmtContagem, fmtData, fmtDecimal, fmtInteiro, fmtMoeda, fmtPct, SEM_DADO,
+  fmtContagem, fmtData, fmtDecimal, fmtInteiro, fmtMoeda, fmtPct, fmtStatus, SEM_DADO,
 } from '@/lib/painel/formato';
 
 export type DadosPainel = {
@@ -73,12 +73,14 @@ export function Painel(d: DadosPainel) {
 // ── Cards de métricas ────────────────────────────────────────────────────────
 
 // "menor é melhor" inverte a cor da variação (CPC subir é ruim).
-type Card = { chave: keyof Totais; rotulo: string; fmt: (v: number | null) => string; menorMelhor?: boolean; nota?: string };
+// Só métricas numéricas viram card (tipo_resultado é texto).
+type Card = { chave: Exclude<keyof Totais, 'tipo_resultado'>; rotulo: string; fmt: (v: number | null) => string; menorMelhor?: boolean; nota?: string };
 
 // 10 cards por plataforma (5 + 5). Cada uma mostra o que ela de fato mede:
 // o Google não tem alcance, frequência nem conversas de mensagem; a Meta não
 // tem parcela de impressões. Na Meta, alcance vem antes de impressões (prioridade
-// do Jackson); impressões continua na tabela de campanhas.
+// do Jackson); impressões continua na tabela de campanhas. CPC saiu da Meta para
+// dar lugar ao custo por conversa (decisão de 09/10/2026); continua na tabela.
 const CARDS: Record<string, Card[]> = {
   meta: [
     { chave: 'investimento', rotulo: 'Investimento', fmt: fmtMoeda },
@@ -86,11 +88,11 @@ const CARDS: Record<string, Card[]> = {
     { chave: 'frequencia', rotulo: 'Frequência', fmt: fmtDecimal, nota: 'Calculada sobre o alcance somado: tende a ficar abaixo da real.' },
     { chave: 'cliques', rotulo: 'Cliques', fmt: fmtInteiro },
     { chave: 'ctr', rotulo: 'CTR', fmt: fmtPct },
-    { chave: 'cpc', rotulo: 'CPC', fmt: fmtMoeda, menorMelhor: true },
     { chave: 'cpm', rotulo: 'CPM', fmt: fmtMoeda, menorMelhor: true },
     { chave: 'leads', rotulo: 'Leads', fmt: fmtContagem },
     { chave: 'cpl', rotulo: 'Custo por lead', fmt: fmtMoeda, menorMelhor: true },
     { chave: 'conversas', rotulo: 'Conversas', fmt: fmtContagem },
+    { chave: 'custo_conversa', rotulo: 'Custo por conversa', fmt: fmtMoeda, menorMelhor: true },
   ],
   google: [
     { chave: 'investimento', rotulo: 'Investimento', fmt: fmtMoeda },
@@ -189,6 +191,7 @@ function TabelaCampanhas({ linhas, nomes, plataforma }: {
             <th className="p-3 font-medium">{google ? 'Conversões' : 'Leads'}</th>
             <th className="p-3 font-medium">{google ? 'Custo/conv.' : 'CPL'}</th>
             <th className="p-3 font-medium">{google ? 'Parcela impr.' : 'Conversas'}</th>
+            {!google && <th className="p-3 font-medium">Custo/conversa</th>}
           </tr>
         </thead>
         <tbody className="text-right">
@@ -198,7 +201,7 @@ function TabelaCampanhas({ linhas, nomes, plataforma }: {
               <tr key={c.campanha_id} className="border-b border-border last:border-0">
                 <td className="text-left p-3">
                   <div>{info?.nome ?? c.campanha_id}</div>
-                  {info?.status && <div className="text-xs text-faint">{info.status}</div>}
+                  {info?.status && <div className="text-xs text-faint">{fmtStatus(info.status)}</div>}
                 </td>
                 <td className="p-3">{fmtMoeda(c.investimento)}</td>
                 <td className="p-3">{fmtInteiro(c.impressoes)}</td>
@@ -209,6 +212,7 @@ function TabelaCampanhas({ linhas, nomes, plataforma }: {
                 <td className="p-3">{fmtContagem(c.leads)}</td>
                 <td className="p-3">{fmtMoeda(c.cpl)}</td>
                 <td className="p-3">{google ? fmtPct(c.parcela_impressoes) : fmtContagem(c.conversas)}</td>
+                {!google && <td className="p-3">{fmtMoeda(c.custo_conversa)}</td>}
               </tr>
             );
           })}

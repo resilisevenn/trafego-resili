@@ -249,7 +249,8 @@ _01/10 a 07/10 · vs. semana anterior_
     Comparação com o trecho equivalente anterior (esta semana até quinta × semana
     passada até quinta). "Máximo" não tem comparação.
   - **Cards:** 10 por plataforma (5 + 5), com variação. Meta: Investimento, Alcance,
-    Frequência, Cliques, CTR, CPC, CPM, Leads, CPL, Conversas. Google: Investimento,
+    Frequência, Cliques, CTR, CPM, Leads, CPL, Conversas, Custo por conversa (CPC
+    saiu dos cards da Meta em 09/10/2026; continua na tabela). Google: Investimento,
     Impressões, Cliques, CTR, CPC, CPM, Conversões, Custo por conversão, Taxa de
     conversão, Parcela de impressões.
   - **Card de saldo**, destacado quando estiver abaixo do limite.
@@ -270,11 +271,17 @@ _01/10 a 07/10 · vs. semana anterior_
 |---|---|
 | Saldo | 🔴 dura menos que o aviso da conta (padrão 3 dias) · 🟡 menos que o dobro · boleto sem permissão de leitura também avisa |
 | Conta parou | 🔴 gasto zero ontem, numa conta que gastava ≥ R$ 5/dia |
-| CPL disparou | 🟡 7 dias 30% acima das 4 semanas anteriores (≥ 3 leads) |
-| Acima da meta | 🟡 CPL acima da meta do cliente |
+| Custo disparou | 🟡 custo por resultado dos 7 dias 30% acima das 4 semanas anteriores (≥ 3 resultados, mesmo tipo) |
+| Acima da meta | 🟡 custo por resultado acima da meta do cliente |
 | Fadiga (Meta) | 🟡 frequência da semana > 3 |
 | Ritmo da verba | 🟡 projeção do mês > 110% ou < 80% da verba |
 | Coleta | 🟡 erro ou sem coleta há mais de 26 h |
+
+**Custo por resultado (decisão de 09/10/2026):** o resultado da conta é o LEAD quando
+há leads; senão, a CONVERSA (contas de mensagem: Dra Isadora, Dr. Anderson, RVF - R7).
+Com os dois, vale o lead. Visão geral ("Custo/resultado"), alertas de custo e a "Meta de
+custo/resultado" da Configuração usam essa regra. O relatório de segunda ganhou
+"Custo/conversa" (`0004`, aplicada em 09/10/2026).
 
 **Aproximação conhecida:** na Meta, alcance e frequência do período somam os
 alcances diários (quem viu em dois dias conta duas vezes). O número exato exige
@@ -311,6 +318,11 @@ Legenda: ✅ feito · 🟡 código pronto, falta ativar ou validar · ⬜ não c
 - [x] `trafego.relatorio_semanal()`: uma mensagem por cliente, formato brasileiro, com CPL
 - [ ] Fluxo n8n: segunda 08h → função → UazAPI para o grupo interno
 - [ ] Uma segunda chegando sem ninguém tocar
+- [x] Fluxo n8n criado (desativado): "Tráfego — Relatório de Segunda", dois grupos (ATIVACAO.md, seção 5)
+- [ ] Resultado do Meta (ex.: TRAFEGOSEGUIDORES da Dra Isadora, visitas ao perfil): teste de
+      09/10 saiu só com investimento. Esperado: a coleta com `results` (0007) ainda não
+      está na Vercel e a métrica não está marcada. Após o deploy: rodar a coleta, marcar
+      Resultado/Custo por resultado nos cards Meta e conferir contra o Gerenciador.
 
 ### Fase 3 — dashboard
 - [x] Login, visão geral, por conta, configuração, prévia local (`/previa`)
@@ -328,7 +340,7 @@ Legenda: ✅ feito · 🟡 código pronto, falta ativar ou validar · ⬜ não c
 - [x] Alerta por dias em vez de reais (`0003`, aplicada em 09/10/2026)
 - [ ] Liberar permissão de gerenciar no `dashboard-trafego` para ler o crédito de boleto/Pix
 - [ ] Validar a leitura do crédito numa conta de boleto real (`saldoDoTexto`)
-- [ ] Fluxo n8n diário depois da coleta
+- [x] Fluxo n8n diário depois da coleta ("Tráfego — Alerta de Saldo", 07h, desativado)
 - [ ] Teste com limite alto: chega um único aviso
 
 ### Fase 6 — alertas de anomalia no WhatsApp

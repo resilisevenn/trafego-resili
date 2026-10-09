@@ -154,3 +154,21 @@ describe('métricas do Google', () => {
     expect(totais([l({ impressoes: 100 })]).parcela_impressoes).toBeNull();
   });
 });
+
+describe('custo por resultado', () => {
+  it('conta de mensagem: resultado é a conversa', () => {
+    const t = totais([l({ investimento: 446, conversas: 40 })]);
+    expect(t).toMatchObject({ tipo_resultado: 'conversa', resultados: 40 });
+    expect(t.custo_conversa).toBeCloseTo(11.15);
+    expect(t.custo_resultado).toBeCloseTo(11.15);
+  });
+  it('conta com leads e conversas: lead é o principal', () => {
+    const t = totais([l({ investimento: 270, leads: 11, conversas: 2 })]);
+    expect(t.tipo_resultado).toBe('lead');
+    expect(t.custo_resultado).toBeCloseTo(24.55);
+    expect(t.custo_conversa).toBe(135);
+  });
+  it('sem lead nem conversa: tudo nulo', () => {
+    expect(totais([l({ investimento: 50 })])).toMatchObject({ tipo_resultado: null, custo_resultado: null, custo_conversa: null });
+  });
+});

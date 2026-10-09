@@ -74,6 +74,23 @@ describe('CPL', () => {
   });
 });
 
+describe('custo por resultado nas contas de mensagem', () => {
+  it('custo por conversa 30% acima dispara, com texto de conversa', () => {
+    const linhas = dias('2026-09-10', '2026-10-14', (d) => ({ investimento: 100, conversas: d >= '2026-10-08' ? 2 : 4 }));
+    const s = saude(base({ linhas }));
+    expect(s.alertas.map((a) => a.tipo)).toContain('cpl');
+    expect(s.alertas.find((a) => a.tipo === 'cpl')!.texto).toMatch(/conversa/);
+  });
+  it('meta de custo vale para conversa', () => {
+    const linhas = dias('2026-10-08', '2026-10-14', () => ({ investimento: 100, conversas: 1 }));
+    expect(tipos(base({ linhas, cplMeta: 80 }))).toContain('atencao:meta_cpl');
+  });
+  it('não compara lead com conversa', () => {
+    const linhas = dias('2026-09-10', '2026-10-14', (d) => (d >= '2026-10-08' ? { investimento: 100, conversas: 1 } : { investimento: 100, leads: 10 }));
+    expect(tipos(base({ linhas }))).not.toContain('atencao:cpl');
+  });
+});
+
 describe('fadiga', () => {
   it('frequência acima de 3 só na Meta', () => {
     const linhas = dias('2026-10-08', '2026-10-14', () => ({ investimento: 10, impressoes: 400, alcance: 100 }));
