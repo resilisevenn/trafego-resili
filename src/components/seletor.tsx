@@ -6,6 +6,7 @@
 
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { PERIODOS } from '@/lib/painel/agregar';
+import { LogoPlataforma } from '@/components/logo-plataforma';
 
 export type OpcaoConta = {
   id: string;
@@ -53,15 +54,28 @@ export function Seletor({ contas, contaId, periodo, de, ate }: {
         </select>
       </Campo>
 
-      <Campo rotulo="Plataforma">
-        <select
-          className="input"
-          value={atual?.plataforma}
-          onChange={(e) => ir({ conta: primeira((c) => c.cliente === atual?.cliente && c.plataforma === e.target.value) })}
-        >
-          {plataformas.map((p) => <option key={p} value={p}>{PLATAFORMAS[p]}</option>)}
-        </select>
-      </Campo>
+      {/* Botões com logo em vez de <select>: <option> não aceita imagem. Só as
+          plataformas que esta clínica tem. */}
+      <div className="flex flex-col gap-1">
+        <span className="label">Plataforma</span>
+        <div className="flex gap-1" role="group" aria-label="Plataforma">
+          {plataformas.map((p) => {
+            const ativo = atual?.plataforma === p;
+            return (
+              <button
+                key={p}
+                type="button"
+                aria-pressed={ativo}
+                className={`btn inline-flex items-center gap-2 ${ativo ? 'btn-primary' : ''}`}
+                onClick={() => !ativo && ir({ conta: primeira((c) => c.cliente === atual?.cliente && c.plataforma === p) })}
+              >
+                <LogoPlataforma plataforma={p} cor={ativo ? 'currentColor' : undefined} />
+                {PLATAFORMAS[p]}
+              </button>
+            );
+          })}
+        </div>
+      </div>
 
       {daPlataforma.length > 1 && (
         <Campo rotulo="Conta">

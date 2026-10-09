@@ -1,5 +1,6 @@
 'use client';
 
+import Image from 'next/image';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
@@ -35,8 +36,12 @@ export default function LoginPage() {
 
   return (
     <main className="flex-1 grid place-items-center px-4">
-      <form onSubmit={entrar} className="card w-full max-w-sm p-6">
-        <h1 className="text-lg font-semibold">Tráfego — Resili Sevenn</h1>
+      <div className="w-full max-w-sm">
+      <div className="mb-8 flex justify-center">
+        <Image src="/logo-resili-sevenn.png" alt="Resili Sevenn" width={384} height={40} className="h-10 w-auto" priority />
+      </div>
+      <form onSubmit={entrar} className="card w-full p-6">
+        <h1 className="font-display text-2xl">Tráfego</h1>
         <p className="text-sm text-muted mt-1 mb-6">Entre para acessar o painel.</p>
 
         <div className="mb-3">
@@ -73,6 +78,7 @@ export default function LoginPage() {
           {carregando ? 'Entrando…' : 'Entrar'}
         </button>
       </form>
+      </div>
     </main>
   );
 }

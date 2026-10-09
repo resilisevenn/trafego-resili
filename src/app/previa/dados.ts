@@ -6,15 +6,15 @@ import type { OpcaoConta } from '@/components/seletor';
 import type { LinhaMetrica } from '@/lib/painel/agregar';
 
 export type ContaFicticia = OpcaoConta & {
-  limite: number | null; saldo: number | null; fonte: string; erro?: string;
+  alertaDias: number; saldo: number | null; teto: number | null; fonte: string; erro?: string;
   verba: number | null; cplMeta: number | null; paradaOntem?: boolean;
 };
 
 export const CONTAS: ContaFicticia[] = [
-  { id: 'a-meta', nome: 'Conta Meta A', plataforma: 'meta', cliente: 'Clínica Exemplo A', limite: 500, saldo: 321.09, fonte: 'spend_cap_menos_gasto', verba: 1500, cplMeta: 15 },
-  { id: 'a-google', nome: 'Conta Google A', plataforma: 'google', cliente: 'Clínica Exemplo A', limite: 200, saldo: 1840.5, fonte: 'account_budget', verba: 1700, cplMeta: null },
-  { id: 'b-meta', nome: 'Conta Meta B', plataforma: 'meta', cliente: 'Clínica Exemplo B', limite: null, saldo: null, fonte: 'sem_limite', erro: '(#17) User request limit reached', verba: null, cplMeta: null, paradaOntem: true },
-  { id: 'novo', nome: 'Conta recém-chegada', plataforma: 'google', cliente: 'Sem cliente', limite: null, saldo: null, fonte: 'sem_account_budget', verba: null, cplMeta: null },
+  { id: 'a-meta', nome: 'Conta Meta A', plataforma: 'meta', cliente: 'Clínica Exemplo A', alertaDias: 3, saldo: 321.09, teto: 1500, fonte: 'spend_cap_menos_gasto', verba: 1500, cplMeta: 15 },
+  { id: 'a-google', nome: 'Conta Google A', plataforma: 'google', cliente: 'Clínica Exemplo A', alertaDias: 5, saldo: 1840.5, teto: 2500, fonte: 'account_budget', verba: 1700, cplMeta: null },
+  { id: 'b-meta', nome: 'Conta Meta B', plataforma: 'meta', cliente: 'Clínica Exemplo B', alertaDias: 3, saldo: null, teto: null, fonte: 'sem_limite', erro: '(#17) User request limit reached', verba: null, cplMeta: null, paradaOntem: true },
+  { id: 'novo', nome: 'Conta recém-chegada', plataforma: 'google', cliente: 'Sem cliente', alertaDias: 3, saldo: null, teto: null, fonte: 'pre_pago_sem_permissao', verba: null, cplMeta: null },
 ];
 
 export const CAMPANHAS: Record<string, [string, string][]> = {

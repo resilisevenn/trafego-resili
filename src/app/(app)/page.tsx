@@ -5,10 +5,13 @@
 import { createClient } from '@/lib/supabase/server';
 import { buscarTodas } from '@/lib/supabase/paginar';
 import { Aviso } from '@/components/painel';
-import { VisaoGeral, type LinhaGeral } from '@/components/visao-geral';
+import { PERIODOS_GERAL, VisaoGeral, type LinhaGeral } from '@/components/visao-geral';
+import { BotaoAcao } from '@/components/botao-acao';
+import { FiltroPlataforma, lerFiltro } from '@/components/filtro-plataforma';
+import { atualizarTodas } from './acoes';
 import { hojeNoFuso } from '@/lib/coleta/datas';
 import { prioridade, saude } from '@/lib/painel/saude';
-import type { LinhaMetrica } from '@/lib/painel/agregar';
+import { descreverPeriodo, entre, periodoAnterior, resolverPeriodo, totais, type LinhaMetrica } from '@/lib/painel/agregar';
 
 const FUSO_PADRAO = 'America/Sao_Paulo';
 
@@ -18,13 +21,19 @@ function menos(dia: string, n: number) {
   return d.toISOString().slice(0, 10);
 }
 
-export default async function VisaoGeralPage() {
+// O botão "Atualizar todas" coleta as contas visíveis nesta requisição.
+export const maxDuration = 300;
+
+type Props = { searchParams: Promise<Record<string, string | undefined>> };
+
+export default async function VisaoGeralPage({ searchParams }: Props) {
+  const q = await searchParams;
   const supabase = await createClient();
   const db = supabase.schema('trafego');
 
   const { data: contas, error } = await db
     .from('contas_anuncio')
-    .select('id, nome, plataforma, fuso, limite_alerta_saldo, verba_mensal, cpl_meta, clientes(nome)')
+    .select('id, nome, plataforma, fuso, alerta_saldo_dias, verba_mensal, cpl_meta, clientes(nome)')
     .eq('ativa', true);
   if (error) return <Aviso titulo="Erro ao ler as contas">{error.message}</Aviso>;
   if (!contas?.length) {
@@ -40,7 +49,12 @@ export default async function VisaoGeralPage() {
   // ou desde o dia 1º do mês, o que vier antes. Uma consulta, não uma por conta.
   const hoje = hojeNoFuso(FUSO_PADRAO);
   const iniMes = `${hoje.slice(0, 8)}01`;
-  const desde = [menos(hoje, 36), iniMes].sort()[0];
+  // Período das COLUNAS (seletor). Os alertas seguem nos 7 dias fechados.
+  const chave = PERIODOS_GERAL.some(([k]) => k === q.periodo) ? q.periodo! : '7d';
+  const plataforma = lerFiltro(q.plataforma);
+  const periodo = resolverPeriodo(chave, hoje);
+  const anterior = periodoAnterior(periodo);
+  const desde = [menos(hoje, 36), iniMes, anterior?.de ?? hoje].sort()[0];
   const ids = contas.map((c) => c.id);
 
   const [metricasR, saldosR, syncR] = await Promise.all([
@@ -52,7 +66,7 @@ export default async function VisaoGeralPage() {
       .order('conta_anuncio_id').order('data').order('campanha_id')
       .range(de, ate)),
     db.from('saldo_conta')
-      .select('conta_anuncio_id, data, saldo')
+      .select('conta_anuncio_id, data, saldo, teto, fonte')
       .in('conta_anuncio_id', ids)
       .gte('data', menos(hoje, 7))
       .order('data', { ascending: false }),
@@ -88,19 +102,26 @@ export default async function VisaoGeralPage() {
 
   const linhas: LinhaGeral[] = contas
     .map((c) => {
-      const saldo = num(saldos.get(c.id)?.saldo);
+      const foto = saldos.get(c.id);
+      const saldo = num(foto?.saldo);
       return {
         contaId: c.id,
         cliente: (c.clientes as unknown as { nome: string } | null)?.nome ?? 'Sem cliente',
         conta: c.nome,
         plataforma: c.plataforma,
         saldo,
+        infoSaldo: { fonte: foto?.fonte ?? null, saldo, teto: num(foto?.teto) },
+        numeros: {
+          atual: totais(entre(porConta.get(c.id) ?? [], periodo)),
+          anterior: anterior ? totais(entre(porConta.get(c.id) ?? [], anterior)) : null,
+        },
         saude: saude({
           hoje: hojeNoFuso(c.fuso),
           plataforma: c.plataforma,
           linhas: porConta.get(c.id) ?? [],
           saldo,
-          limiteAlerta: num(c.limite_alerta_saldo),
+          fonteSaldo: foto?.fonte ?? null,
+          alertaDias: c.alerta_saldo_dias,
           verbaMensal: num(c.verba_mensal),
           cplMeta: num(c.cpl_meta),
           ultimaColeta: syncs.get(c.id) ?? null,
@@ -109,5 +130,20 @@ export default async function VisaoGeralPage() {
     })
     .sort((a, b) => prioridade(b.saude) - prioridade(a.saude) || a.cliente.localeCompare(b.cliente, 'pt-BR'));
 
-  return <VisaoGeral linhas={linhas} hrefConta={(id) => `/conta?conta=${id}`} />;
+  return (
+    <VisaoGeral
+      linhas={plataforma ? linhas.filter((l) => l.plataforma === plataforma) : linhas}
+      hrefConta={(id) => `/conta?conta=${id}`}
+      periodo={chave}
+      rotuloPeriodo={descreverPeriodo(periodo, anterior)}
+      hrefPeriodo={(k) => {
+        const p = new URLSearchParams();
+        if (k !== '7d') p.set('periodo', k);
+        if (plataforma) p.set('plataforma', plataforma);
+        return p.size ? `/?${p}` : '/';
+      }}
+      filtro={<FiltroPlataforma caminho="/" parametro="plataforma" atual={plataforma} params={q} />}
+      atualizar={<BotaoAcao rotulo="↻ Atualizar todas" rotuloPendente="Coletando todas as contas…" acao={atualizarTodas} />}
+    />
+  );
 }

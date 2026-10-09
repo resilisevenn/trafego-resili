@@ -28,6 +28,7 @@ const diasEntre = (a: string, b: string) => Math.round((dia(b).getTime() - dia(a
 
 export const PERIODOS = [
   ['hoje', 'Hoje'],
+  ['ontem', 'Ontem'],
   ['semana', 'Esta semana'],
   ['semana_anterior', 'Semana anterior'],
   ['7d', 'Últimos 7 dias'],
@@ -72,6 +73,8 @@ export function resolverPeriodo(
       break;
     case 'hoje':
       return { chave, de: hoje, ate: hoje };
+    case 'ontem':
+      return { chave, de: ontem, ate: ontem };
     case 'semana':
       return { chave, de: segundaDaSemana(hoje), ate: hoje };
     case 'semana_anterior': {
@@ -121,6 +124,18 @@ export function periodoAnterior(p: Periodo & { chave?: string }): Periodo | null
     }
   }
   return { de: somaDias(p.de, -n), ate: somaDias(p.de, -1) };
+}
+
+// Linhas dentro de um período (datas inclusivas).
+export function entre(linhas: LinhaMetrica[], p: Periodo): LinhaMetrica[] {
+  return linhas.filter((l) => l.data >= p.de && l.data <= p.ate);
+}
+
+// "01/10 a 07/10 · comparado com 24/09 a 30/09" (um dia só: "08/10").
+export function descreverPeriodo(p: Periodo, anterior: Periodo | null): string {
+  const dm = (s: string) => `${s.slice(8)}/${s.slice(5, 7)}`;
+  const um = (x: Periodo) => (x.de === x.ate ? dm(x.de) : `${dm(x.de)} a ${dm(x.ate)}`);
+  return anterior ? `${um(p)} · comparado com ${um(anterior)}` : um(p);
 }
 
 export function diasDoPeriodo(p: Periodo): string[] {

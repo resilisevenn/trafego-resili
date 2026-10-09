@@ -90,15 +90,16 @@ export function paraSaldo(orcamentos: OrcamentoConta[]) {
     .filter((o) => o.status === 'APPROVED')
     .sort((a, b) => (b.approvedStartDateTime ?? '').localeCompare(a.approvedStartDateTime ?? ''))[0];
 
-  if (!vigente) return { saldo: null, tipo_pagamento: 'desconhecido', fonte: 'sem_account_budget', bruto: { orcamentos } };
+  if (!vigente) return { saldo: null, teto: null, tipo_pagamento: 'desconhecido', fonte: 'sem_account_budget', bruto: { orcamentos } };
 
   const limite = Number(vigente.adjustedSpendingLimitMicros ?? vigente.approvedSpendingLimitMicros ?? 0);
   if (vigente.approvedSpendingLimitType === 'INFINITE' || !limite) {
-    return { saldo: null, tipo_pagamento: 'account_budget', fonte: 'sem_limite', bruto: { orcamentos } };
+    return { saldo: null, teto: null, tipo_pagamento: 'account_budget', fonte: 'sem_limite', bruto: { orcamentos } };
   }
   const gasto = Number(vigente.amountServedMicros ?? 0);
   return {
     saldo: Math.round((limite - gasto) / 1e4) / 100,
+    teto: Math.round(limite / 1e4) / 100,
     tipo_pagamento: 'account_budget',
     fonte: 'account_budget',
     bruto: { orcamentos },

@@ -28,6 +28,7 @@ describe('períodos de calendário (hoje = quinta, 08/10/2026)', () => {
   const r = (chave: string, inicio?: string) => resolverPeriodo(chave, hoje, undefined, undefined, inicio);
 
   it('hoje', () => expect(r('hoje')).toMatchObject({ de: '2026-10-08', ate: '2026-10-08' }));
+  it('ontem', () => expect(r('ontem')).toMatchObject({ de: '2026-10-07', ate: '2026-10-07' }));
   it('esta semana começa na segunda', () => expect(r('semana')).toMatchObject({ de: '2026-10-05', ate: '2026-10-08' }));
   it('semana anterior: segunda a domingo', () => expect(r('semana_anterior')).toMatchObject({ de: '2026-09-28', ate: '2026-10-04' }));
   it('domingo ainda é da semana que começou na segunda', () => {
@@ -42,6 +43,9 @@ describe('períodos de calendário (hoje = quinta, 08/10/2026)', () => {
 describe('periodoAnterior', () => {
   it('últimos N dias: mesmo tamanho, imediatamente antes (atravessa mês)', () => {
     expect(periodoAnterior({ de: '2026-10-01', ate: '2026-10-07' })).toEqual({ de: '2026-09-24', ate: '2026-09-30' });
+  });
+  it('ontem × anteontem', () => {
+    expect(periodoAnterior({ chave: 'ontem', de: '2026-10-07', ate: '2026-10-07' })).toEqual({ de: '2026-10-06', ate: '2026-10-06' });
   });
   it('hoje × ontem', () => {
     expect(periodoAnterior({ chave: 'hoje', de: '2026-10-08', ate: '2026-10-08' })).toEqual({ de: '2026-10-07', ate: '2026-10-07' });

@@ -39,8 +39,9 @@ export default async function PreviaConta({ searchParams }: Props) {
       anterior={anterior}
       linhas={linhasFicticias(conta.id, conta.plataforma, diasDoPeriodo({ de: anterior && anterior.de < periodo.de ? anterior.de : periodo.de, ate: periodo.ate }))}
       nomes={new Map(CAMPANHAS[conta.id].map(([id, nome]) => [id, { nome, status: 'ACTIVE' }]))}
-      saldo={{ saldo: conta.saldo, data: hoje, fonte: conta.fonte }}
-      limite={conta.limite}
+      saldo={{ saldo: conta.saldo, teto: conta.teto, data: hoje, fonte: conta.fonte }}
+      alertaDias={conta.alertaDias}
+      diasDeSaldo={conta.saldo != null ? conta.saldo / 45 : null}
       sync={{
         inicio: new Date().toISOString(),
         status: conta.erro ? 'erro' : 'ok',

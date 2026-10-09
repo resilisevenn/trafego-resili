@@ -47,3 +47,33 @@ export async function atualizarClinica(contaId: string): Promise<{ ok: boolean; 
     ? { ok: false, mensagem: `Atualizado com erro: ${erros[0]}` }
     : { ok: true, mensagem: 'Atualizado agora.' };
 }
+
+// "Atualizar todas" da visão geral: coleta agora TODAS as contas que este usuário
+// vê (a RLS decide: o gestor só dispara as dele). Mesma trava de 5 minutos.
+export async function atualizarTodas(): Promise<{ ok: boolean; mensagem: string }> {
+  const supabase = await createClient();
+  const db = supabase.schema('trafego');
+  const { data: contas } = await db.from('contas_anuncio').select('id').eq('ativa', true);
+  const ids = (contas ?? []).map((c) => c.id as string);
+  if (!ids.length) return { ok: false, mensagem: 'Nenhuma conta disponível.' };
+
+  const { data: ultima } = await db
+    .from('sync_log')
+    .select('inicio')
+    .in('conta_anuncio_id', ids)
+    .order('inicio', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (ultima && Date.now() - new Date(ultima.inicio).getTime() < INTERVALO_MINIMO_MS) {
+    return { ok: false, mensagem: 'Atualizado há menos de 5 minutos. Tente daqui a pouco.' };
+  }
+
+  const resultado = await sincronizar(ids);
+  revalidatePath('/');
+  revalidatePath('/conta');
+  const todas = [resultado.meta, resultado.google].flatMap((r) => (typeof r === 'string' ? [r] : Object.values(r)));
+  const erros = todas.filter((v) => v.startsWith('erro') || v.startsWith('pulado'));
+  return erros.length
+    ? { ok: false, mensagem: `${todas.length - erros.length} atualizada(s); ${erros.length} com problema: ${erros[0]}` }
+    : { ok: true, mensagem: `${todas.length} conta(s) atualizada(s) agora.` };
+}

@@ -14,7 +14,7 @@ function dias(de: string, ate: string, f: (d: string) => Partial<LinhaMetrica>):
 }
 
 const base = (o: Partial<Contexto>): Contexto => ({
-  hoje: HOJE, plataforma: 'meta', linhas: [], saldo: null, limiteAlerta: null,
+  hoje: HOJE, plataforma: 'meta', linhas: [], saldo: null, fonteSaldo: 'spend_cap_menos_gasto', alertaDias: null,
   verbaMensal: null, cplMeta: null, ultimaColeta: { inicio: AGORA.toISOString(), status: 'ok' }, agora: AGORA, ...o,
 });
 const tipos = (c: Contexto) => saude(c).alertas.map((a) => `${a.nivel}:${a.tipo}`);
@@ -24,16 +24,25 @@ describe('dias de saldo', () => {
   it('saldo ÷ média dos últimos 7 dias', () => {
     expect(saude(base({ linhas, saldo: 550 })).diasDeSaldo).toBeCloseTo(5.5);
   });
-  it('menos de 3 dias: crítico; menos de 7: atenção', () => {
+  it('padrão 3 dias: abaixo de 3 crítico; até 6 atenção; acima nada', () => {
     expect(tipos(base({ linhas, saldo: 250 }))).toContain('critico:saldo');
     expect(tipos(base({ linhas, saldo: 550 }))).toContain('atencao:saldo');
-    expect(tipos(base({ linhas, saldo: 5000 }))).not.toContain('atencao:saldo');
+    expect(tipos(base({ linhas, saldo: 700 }))).not.toContain('atencao:saldo');
+  });
+  it('aviso configurado por conta (7 dias)', () => {
+    expect(tipos(base({ linhas, saldo: 550, alertaDias: 7 }))).toContain('critico:saldo');
+    expect(tipos(base({ linhas, saldo: 1300, alertaDias: 7 }))).toContain('atencao:saldo');
   });
   it('sem gasto recente: não projeta', () => {
     expect(saude(base({ linhas: [], saldo: 100 })).diasDeSaldo).toBeNull();
   });
-  it('abaixo do limite de alerta vence a projeção', () => {
-    expect(tipos(base({ linhas, saldo: 5000, limiteAlerta: 6000 }))).toContain('critico:saldo');
+  it('texto diz se é boleto ou teto de gastos', () => {
+    const texto = (fonteSaldo: string) => saude(base({ linhas, saldo: 250, fonteSaldo })).alertas[0].texto;
+    expect(texto('credito_pre_pago')).toMatch(/boleto/i);
+    expect(texto('spend_cap_menos_gasto')).toMatch(/teto/i);
+  });
+  it('boleto sem permissão de leitura: atenção, não silêncio', () => {
+    expect(tipos(base({ linhas, saldo: null, fonteSaldo: 'pre_pago_sem_permissao' }))).toContain('atencao:saldo');
   });
 });
 

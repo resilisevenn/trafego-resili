@@ -71,14 +71,14 @@ rodar `supabase db push`. Cada migration leva um cabeçalho comentado dizendo o 
 | Tabela | Conteúdo |
 |---|---|
 | `trafego.clientes` | Cliente da agência no tráfego (nome, ativo). Não referencia `public.clientes` do Carteira, para o gestor não depender de tabela que não pode ler |
-| `trafego.contas_anuncio` | `plataforma` (meta/google), `conta_id` nativo, nome, `cliente_id`, `limite_alerta_saldo`, `verba_mensal`, `cpl_meta`, `ativa` |
+| `trafego.contas_anuncio` | `plataforma` (meta/google), `conta_id` nativo, nome, `cliente_id`, `alerta_saldo_dias` (padrão 3), `verba_mensal`, `cpl_meta`, `ativa` |
 | `trafego.acesso_conta` | `user_id` × `conta_anuncio_id`: quais contas cada gestor vê |
 | `trafego.campanhas` | Estrutura: campanha, conjunto/grupo, anúncio (ids e nomes nativos), status |
 | `trafego.metricas_diarias` | Uma linha por **campanha por dia**, com unique `(conta, campanha_id, data)` e upsert |
 | `trafego.saldo_conta` | Foto diária do saldo: `conta`, `data`, `saldo`, `tipo_pagamento`, `fonte` (de qual campo veio), `bruto` (jsonb da resposta) |
 | `trafego.sync_log` | Cada execução da coleta: início, fim, status, linhas, erro |
 | `trafego.relatorio_config` | Por conta: quais campanhas entram no relatório de segunda e quais métricas |
-| `trafego.alerta_saldo` | Avisos de saldo enviados. A PK `(conta, data)` garante no máximo um por dia |
+| `trafego.alerta_saldo` | Avisos de saldo enviados, com os `dias` projetados. A PK `(conta, data)` garante no máximo um por dia |
 
 **Colunas de `metricas_diarias`:** `investimento`, `impressoes`, `alcance`,
 `frequencia`, `cliques`, `ctr`, `cpc`, `cpm`, `leads`, `conversas`, `parcela_impressoes`
@@ -223,7 +223,14 @@ _01/10 a 07/10 · vs. semana anterior_
 ## 9. Alerta de saldo (n8n)
 
 - **Quando roda:** diariamente, depois da coleta.
-- **Regra:** dispara se `saldo < limite_alerta_saldo` da conta.
+- **Regra (desde 09/10/2026, migration 0003):** dispara se o saldo de hoje dura menos que
+  `alerta_saldo_dias` da conta, no ritmo do gasto médio dos últimos 7 dias. "Saldo" é o
+  crédito do boleto/Pix (pré-pago) ou o que falta até o teto de gastos (cartão). Conta no
+  cartão sem teto não tem saldo: quem pega problema nela é o alerta "conta parou".
+- **Base do "quanto dura" (decisão de 09/10/2026, Jackson):** gasto médio REAL dos últimos
+  7 dias, não verba ÷ 30. Verba ÷ 30 avisaria tarde justo quando a conta gasta mais rápido
+  que o combinado, que é quando os anúncios param de surpresa. Sem gasto nos 7 dias, não há
+  projeção (sem reserva pela verba).
 - **Envio:** grupo interno. **No máximo um aviso por conta por dia**, para não virar
   spam. Registre o último aviso enviado.
 
@@ -251,8 +258,9 @@ _01/10 a 07/10 · vs. semana anterior_
   - **Tabela de campanhas** e **status da coleta** (de `sync_log`).
   - **Botão "Atualizar":** coleta na hora só a clínica na tela (Meta e Google), com
     trava de 5 minutos.
-- **Configuração (só admin):** clientes; por conta, o cliente, o limite de alerta de
-  saldo, a **verba mensal** e a **meta de CPL**; acesso de cada gestor; campanhas e
+- **Configuração (só admin):** clientes; por conta, o cliente, a **verba mensal**, o
+  **aviso de saldo em dias** (atalhos 3 · 5 · 7, com a situação da conta: boleto, teto de
+  gastos ou cartão sem teto) e a **meta de CPL**; acesso de cada gestor; campanhas e
   métricas do relatório.
 - **Coleta:** 1x por dia às 06h (Vercel Cron, plano gratuito) + botão "Atualizar".
 
@@ -260,7 +268,7 @@ _01/10 a 07/10 · vs. semana anterior_
 
 | Alerta | Regra inicial |
 |---|---|
-| Saldo | 🔴 abaixo do limite ou < 3 dias · 🟡 < 7 dias |
+| Saldo | 🔴 dura menos que o aviso da conta (padrão 3 dias) · 🟡 menos que o dobro · boleto sem permissão de leitura também avisa |
 | Conta parou | 🔴 gasto zero ontem, numa conta que gastava ≥ R$ 5/dia |
 | CPL disparou | 🟡 7 dias 30% acima das 4 semanas anteriores (≥ 3 leads) |
 | Acima da meta | 🟡 CPL acima da meta do cliente |
@@ -292,10 +300,11 @@ Legenda: ✅ feito · 🟡 código pronto, falta ativar ou validar · ⬜ não c
 - [x] Schema `trafego` com RLS (`0001`), testado em PostgreSQL local
 - [x] Coleta Meta e Google na rota `/api/cron/sync`, validada a seco com as APIs reais
 - [x] Busca paginada (o Supabase corta em 1000 linhas)
-- [ ] Supabase: aplicar Fase 0, `0001`, `0002` e expor o schema `trafego`
+- [x] Supabase: projeto novo `resili-interno`, Fase 0 + `0001` + `0002` aplicadas e schema `trafego` exposto (09/10/2026)
 - [ ] Vercel: projeto, variáveis de ambiente, domínio
-- [ ] Primeira coleta real e comparação de 3 campanhas com o Gerenciador (diferença < 1%)
-- [ ] Conferir tipos de ação de lead/conversa numa conta de cliente com leads (seção 6)
+- [x] Primeira coleta real (09/10/2026): 6 contas Meta + 3 Google no projeto `resili-interno`
+- [ ] Comparar 3 campanhas com o Gerenciador (diferença < 1%)
+- [x] Tipos de ação conferidos em 09/10/2026 nas 6 contas Meta: `lead` (= formulário + pixel, sem dupla contagem) e `messaging_conversation_started_7d`
 - [ ] Conferir saldo do Google contra o painel de faturamento (seção 7)
 
 ### Fase 2 — relatório de segunda
@@ -316,6 +325,9 @@ Legenda: ✅ feito · 🟡 código pronto, falta ativar ou validar · ⬜ não c
 
 ### Fase 5 — alerta de saldo
 - [x] `trafego.alertas_saldo_pendentes()`: no máximo 1 aviso por conta por dia
+- [x] Alerta por dias em vez de reais (`0003`, aplicada em 09/10/2026)
+- [ ] Liberar permissão de gerenciar no `dashboard-trafego` para ler o crédito de boleto/Pix
+- [ ] Validar a leitura do crédito numa conta de boleto real (`saldoDoTexto`)
 - [ ] Fluxo n8n diário depois da coleta
 - [ ] Teste com limite alto: chega um único aviso
 

@@ -6,8 +6,9 @@ import Link from 'next/link';
 import { Suspense } from 'react';
 import { Seletor, type OpcaoConta } from '@/components/seletor';
 import { GraficoBarras } from '@/components/grafico-barras';
+import { situacaoSaldo } from '@/lib/painel/saldo';
 import {
-  porCampanha, seriePorDia, totais, variacao, type LinhaMetrica, type Periodo, type Totais,
+  descreverPeriodo, porCampanha, seriePorDia, totais, variacao, type LinhaMetrica, type Periodo, type Totais,
 } from '@/lib/painel/agregar';
 import {
   fmtContagem, fmtData, fmtDecimal, fmtInteiro, fmtMoeda, fmtPct, SEM_DADO,
@@ -21,8 +22,9 @@ export type DadosPainel = {
   anterior: Periodo | null; // nulo em "Máximo"
   linhas: LinhaMetrica[]; // período atual + anterior
   nomes: Map<string, { nome: string; status: string | null }>;
-  saldo: { saldo: number | null; data?: string; fonte?: string } | null;
-  limite: number | null;
+  saldo: { saldo: number | null; teto: number | null; data?: string; fonte?: string } | null;
+  alertaDias: number; // aviso de saldo da conta (contas_anuncio.alerta_saldo_dias)
+  diasDeSaldo: number | null; // saldo ÷ gasto médio dos últimos 7 dias
   sync: { inicio: string; status: string; erro: string | null; linhas: number | null } | null;
   atualizar?: React.ReactNode; // botão "Atualizar", ao lado dos filtros
   voltar?: string; // link de volta para a visão geral
@@ -49,11 +51,10 @@ export function Painel(d: DadosPainel) {
       </div>
 
       <p className="text-sm text-muted">
-        {fmtData(d.periodo.de)} a {fmtData(d.periodo.ate)}
-        {d.anterior ? ` · comparado com ${fmtData(d.anterior.de)} a ${fmtData(d.anterior.ate)}` : ' · sem comparação'}
+        {descreverPeriodo(d.periodo, d.anterior)}{d.anterior ? '' : ' · sem comparação'}
       </p>
 
-      <CardSaldo saldo={d.saldo?.saldo ?? null} limite={d.limite} data={d.saldo?.data} fonte={d.saldo?.fonte} />
+      <CardSaldo saldo={d.saldo} plataforma={d.plataforma} alertaDias={d.alertaDias} diasDeSaldo={d.diasDeSaldo} />
 
       <Cards atual={atual} antes={antes} plataforma={d.plataforma} />
 
@@ -135,29 +136,30 @@ function Cards({ atual, antes, plataforma }: { atual: Totais; antes: Totais | nu
 
 // ── Saldo ────────────────────────────────────────────────────────────────────
 
-const FONTES: Record<string, string> = {
-  spend_cap_menos_gasto: 'limite de gastos − gasto',
-  account_budget: 'orçamento da conta − gasto',
-  sem_limite: 'conta sem limite: sem saldo pela API',
-  sem_account_budget: 'sem orçamento de conta',
-};
-
-function CardSaldo({ saldo, limite, data, fonte }: { saldo: number | null; limite: number | null; data?: string; fonte?: string }) {
-  const baixo = saldo != null && limite != null && saldo < limite;
+function CardSaldo({ saldo, plataforma, alertaDias, diasDeSaldo }: {
+  saldo: DadosPainel['saldo'];
+  plataforma: string;
+  alertaDias: number;
+  diasDeSaldo: number | null;
+}) {
+  const sit = situacaoSaldo({ fonte: saldo?.fonte ?? null, saldo: saldo?.saldo ?? null, teto: saldo?.teto ?? null }, plataforma);
+  const acabando = sit.alertaAplica && diasDeSaldo != null && diasDeSaldo < alertaDias;
   return (
-    <div className={`card p-4 flex flex-wrap items-center gap-x-6 gap-y-1 ${baixo ? 'border-bad' : ''}`}>
+    <div className={`card p-4 flex flex-wrap items-center gap-x-6 gap-y-1 ${acabando ? 'border-bad' : ''}`}>
       <div>
-        <div className="text-xs text-muted">Saldo da conta</div>
-        <div className="text-2xl font-semibold tabular-nums">{fmtMoeda(saldo)}</div>
+        <div className="text-xs text-muted">{sit.tipo === 'boleto' ? 'Crédito da conta' : 'Saldo até o teto'}</div>
+        <div className="text-2xl font-semibold tabular-nums">{sit.tipo === 'sem_teto' ? '—' : fmtMoeda(saldo?.saldo ?? null)}</div>
       </div>
-      {baixo && (
+      {sit.alertaAplica && diasDeSaldo != null && (
         // Estado nunca só por cor: ícone + texto.
-        <div className="text-sm text-bad font-medium" role="status">⚠ Abaixo do limite de alerta ({fmtMoeda(limite)})</div>
+        <div className={`text-sm ${acabando ? 'text-bad font-medium' : 'text-muted'}`} role={acabando ? 'status' : undefined}>
+          {acabando ? '⚠ ' : ''}Dura ~{Math.max(Math.floor(diasDeSaldo), 0)} dias no ritmo atual
+          <span className="text-faint"> · aviso com {alertaDias} dias</span>
+        </div>
       )}
-      <div className="text-xs text-faint ml-auto">
-        {data ? `Foto de ${fmtData(data)}` : 'Ainda sem coleta'}
-        {fonte ? ` · ${FONTES[fonte] ?? fonte}` : ''}
-        {limite == null ? ' · sem limite de alerta definido' : ''}
+      <div className="text-xs text-faint ml-auto text-right">
+        <div>{sit.rotulo}{sit.detalhe ? ` · ${sit.detalhe}` : ''}</div>
+        <div>{saldo?.data ? `Foto de ${fmtData(saldo.data)}` : 'Ainda sem coleta'}</div>
       </div>
     </div>
   );

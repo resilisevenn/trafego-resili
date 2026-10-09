@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { paraMetrica, paraSaldo, type ContaMeta, type LinhaInsight } from './meta';
+import { paraMetrica, paraSaldo, saldoDoTexto, type ContaMeta, type LinhaInsight } from './meta';
 
 const base: LinhaInsight = {
   campaign_id: '1',
@@ -70,7 +70,7 @@ describe('paraSaldo', () => {
   it('com limite: limite − gasto, em reais (a Meta manda centavos)', () => {
     // Números do teste real de 08/10/2026 (BRIEFING, seção 7).
     const s = paraSaldo({ ...conta, spend_cap: '200000', amount_spent: '3173', is_prepay_account: false });
-    expect(s).toMatchObject({ saldo: 1968.27, fonte: 'spend_cap_menos_gasto', tipo_pagamento: 'pos_pago' });
+    expect(s).toMatchObject({ saldo: 1968.27, teto: 2000, fonte: 'spend_cap_menos_gasto', tipo_pagamento: 'pos_pago' });
   });
 
   it('sem limite (spend_cap 0): saldo nulo, não zero', () => {
@@ -78,7 +78,27 @@ describe('paraSaldo', () => {
     expect(s).toMatchObject({ saldo: null, fonte: 'sem_limite' });
   });
 
-  it('marca pré-pago', () => {
-    expect(paraSaldo({ ...conta, is_prepay_account: true }).tipo_pagamento).toBe('pre_pago');
+  it('pré-pago sem permissão: saldo nulo, fonte diz o porquê', () => {
+    const s = paraSaldo({ ...conta, is_prepay_account: true, spend_cap: '200000' }, { erro: '(#10) Permission Denied.' });
+    expect(s).toMatchObject({ saldo: null, teto: null, tipo_pagamento: 'pre_pago', fonte: 'pre_pago_sem_permissao' });
   });
+
+  it('pré-pago com permissão: crédito lido do texto, ignora o teto', () => {
+    const s = paraSaldo({ ...conta, is_prepay_account: true, spend_cap: '200000' }, { display_string: 'Saldo disponível (R$ 1.234,56 BRL)' });
+    expect(s).toMatchObject({ saldo: 1234.56, teto: null, fonte: 'credito_pre_pago' });
+  });
+
+  it('pré-pago com texto que não reconhece: nulo, não inventa', () => {
+    const s = paraSaldo({ ...conta, is_prepay_account: true }, { display_string: 'Boleto bancário' });
+    expect(s).toMatchObject({ saldo: null, fonte: 'pre_pago_texto_desconhecido' });
+  });
+});
+
+describe('saldoDoTexto', () => {
+  it.each([
+    ['Saldo disponível (R$ 1.234,56 BRL)', 1234.56],
+    ['Available balance (R$320.00 BRL)', 320],
+    ['R$ 50', 50],
+  ])('%s → %s', (texto, v) => expect(saldoDoTexto(texto)).toBe(v));
+  it('sem R$: nulo', () => expect(saldoDoTexto('Visa *1234')).toBeNull());
 });

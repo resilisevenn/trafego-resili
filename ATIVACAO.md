@@ -4,23 +4,40 @@ Roteiro para quando o Supabase do Carteira voltar. Siga na ordem: cada passo
 depende do anterior. Nenhum valor de credencial vai neste arquivo, só onde
 cada um mora.
 
-## 1. Banco (SQL Editor do Supabase do Carteira)
+## 1. Banco — projeto NOVO do Supabase (`resili-interno`)
 
-1. **Fase 0:** aplicar `carteira-clientes/supabase/migrations/0007_papeis.sql`.
-   Depois, revisar os usuários atuais um a um (instruções no fim do arquivo).
-2. Aplicar `supabase/migrations/0001_schema_trafego.sql`.
-3. Aplicar `supabase/migrations/0002_funcoes_relatorio_alerta.sql`.
-4. **Settings → API → Exposed schemas:** adicionar `trafego`.
+O projeto antigo do Carteira ficou preso em "pausado" (09/10/2026). O banco passa
+para um projeto novo, compartilhado pelo **Carteira** e pelo **tráfego**.
+
+1. **Criar o projeto** `resili-interno`, região **South America (São Paulo)**.
+   Guardar a senha do banco no cofre de senhas.
+2. **Criar o seu usuário antes de tudo:** Authentication → Users → Add user,
+   `contato@resilisevenn.com.br`, com *Auto Confirm*. A Fase 0 dá o papel admin a
+   esse e-mail; se o usuário não existir ainda, ninguém vira admin.
+3. **Gerar o SQL único:** `bash scripts/montar_sql_projeto_novo.sh` → `saida/projeto_novo.sql`
+   (Carteira 0001–0007 + tráfego 0001–0002, nessa ordem, numa transação).
+4. **SQL Editor:** colar e rodar `saida/projeto_novo.sql`. Se der erro, nada fica pela metade.
+5. **Settings → API → Exposed schemas:** adicionar `trafego`.
+6. **Dados do Carteira:** nada a migrar (ver abaixo).
+7. **Apontar o Carteira para o projeto novo:** trocar `NEXT_PUBLIC_SUPABASE_URL` e
+   `NEXT_PUBLIC_SUPABASE_ANON_KEY` no `.env.local` dele e na Vercel dele.
 
 Conferência rápida no SQL Editor:
 
 ```sql
-select role from public.user_roles;            -- você aparece como admin
-select count(*) from trafego.contas_anuncio;  -- 0, ainda sem coleta
+select u.email, r.role from public.user_roles r join auth.users u on u.id = r.user_id;  -- você, admin
+select count(*) from trafego.contas_anuncio;                                           -- 0, ainda sem coleta
 ```
 
-As migrations já foram testadas num PostgreSQL local:
-`bash supabase/teste-local/rodar.sh supabase/teste-local/teste_0002.sql`.
+Testado num PostgreSQL local, do banco vazio ao fim, inclusive a Fase 0 (o gestor
+lê zero linhas do Carteira e não se promove a admin):
+`bash supabase/teste-local/projeto_novo.sh supabase/teste-local/teste_fase0.sql`.
+
+### Dados do projeto antigo
+
+Não migrados (decisão de 09/10/2026): o Carteira ainda estava em desenvolvimento,
+sem cadastro real. O projeto novo nasce limpo. Usuários são recriados em
+Authentication e recebem o papel em `public.user_roles`.
 
 ## 2. Vercel
 
@@ -54,7 +71,7 @@ A resposta lista cada conta com `ok (N linhas)` ou o erro.
 
 Em **Configuração**:
 1. Criar os clientes.
-2. Ligar cada conta a um cliente e definir o limite de alerta de saldo.
+2. Ligar cada conta a um cliente e definir verba, aviso de saldo (em dias) e meta de CPL.
 3. Gestores: criar o usuário no Supabase (Authentication → Add user, Auto Confirm),
    inserir em `public.user_roles` com papel `gestor`, e marcar as contas dele.
 4. Relatório: escolher campanhas e métricas por conta.
@@ -90,8 +107,8 @@ A função marca o aviso como enviado no momento da chamada. Se o envio falhar
 depois, ligue um caminho de erro no n8n (ex.: mensagem para você), porque o
 aviso daquele dia não volta sozinho.
 
-**Teste da Fase 5:** pôr um limite alto numa conta e rodar o fluxo duas vezes:
-deve chegar um único aviso.
+**Teste da Fase 5:** pôr o aviso em 30 dias numa conta com teto de gastos e rodar o
+fluxo duas vezes: deve chegar um único aviso.
 
 ## 6. Validação dos números (cada fase)
 

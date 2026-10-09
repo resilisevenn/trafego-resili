@@ -42,9 +42,11 @@ async function coletarMeta(db: Db, apenas?: Set<string>) {
       const uuid = ids.get(c.account_id);
       if (!uuid || (apenas && !apenas.has(uuid))) continue;
       resumo[c.name] = await comLog(db, 'meta', uuid, async () => {
-        const [campanhas, insights] = await Promise.all([
+        const [campanhas, insights, financiamento] = await Promise.all([
           meta.listarCampanhas(c.account_id, token),
           meta.buscarInsights(c.account_id, token, janela(c.timezone_name)),
+          // Crédito do boleto/Pix: só para pré-paga (exige permissão de gerenciar).
+          c.is_prepay_account ? meta.buscarFinanciamento(c.account_id, token) : Promise.resolve(null),
         ]);
         return gravarConta(db, uuid, {
           campanhas: [
@@ -53,7 +55,7 @@ async function coletarMeta(db: Db, apenas?: Set<string>) {
             ...insights.map((l) => ({ id: l.campaign_id, nome: l.campaign_name, status: 'DESCONHECIDO', objetivo: l.objective })),
           ],
           metricas: insights.map(meta.paraMetrica),
-          saldo: { data: hojeNoFuso(c.timezone_name), ...meta.paraSaldo(c) },
+          saldo: { data: hojeNoFuso(c.timezone_name), ...meta.paraSaldo(c, financiamento) },
         });
       });
     }
@@ -131,7 +133,7 @@ async function registrarContas(
 type DadosConta = {
   campanhas: { id: string; nome: string; status: string; objetivo?: string }[];
   metricas: { campanha_id: string; data: string }[];
-  saldo: { data: string; saldo: number | null; tipo_pagamento: string; fonte: string; bruto: unknown };
+  saldo: { data: string; saldo: number | null; teto: number | null; tipo_pagamento: string; fonte: string; bruto: unknown };
 };
 
 async function gravarConta(db: Db, uuid: string, d: DadosConta) {

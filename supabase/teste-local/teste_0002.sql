@@ -4,9 +4,9 @@ insert into auth.users values ('00000000-0000-0000-0000-00000000000a','admin@tes
 insert into public.user_roles values ('00000000-0000-0000-0000-00000000000a','admin'),('00000000-0000-0000-0000-00000000000b','gestor');
 
 insert into trafego.clientes (id, nome) values ('10000000-0000-0000-0000-000000000001','Clínica Exemplo');
-insert into trafego.contas_anuncio (id, plataforma, conta_id, nome, cliente_id, limite_alerta_saldo) values
- ('20000000-0000-0000-0000-000000000001','meta','111','Conta Meta Exemplo','10000000-0000-0000-0000-000000000001', 500),
- ('20000000-0000-0000-0000-000000000002','google','1234567890','Conta Google Exemplo','10000000-0000-0000-0000-000000000001', null);
+insert into trafego.contas_anuncio (id, plataforma, conta_id, nome, cliente_id, alerta_saldo_dias) values
+ ('20000000-0000-0000-0000-000000000001','meta','111','Conta Meta Exemplo','10000000-0000-0000-0000-000000000001', 3),
+ ('20000000-0000-0000-0000-000000000002','google','1234567890','Conta Google Exemplo','10000000-0000-0000-0000-000000000001', 3);
 insert into trafego.campanhas (conta_anuncio_id, campanha_id, nome) values
  ('20000000-0000-0000-0000-000000000001','m1','Meta 1'),
  ('20000000-0000-0000-0000-000000000002','g1','Google 1');
@@ -37,7 +37,7 @@ set role service_role;
 select mensagem from trafego.relatorio_semanal('2026-10-12');
 
 \echo '=== alerta: 1a chamada devolve 1, 2a devolve 0'
-select conta, saldo, limite, mensagem from trafego.alertas_saldo_pendentes();
+select conta, saldo, dias, mensagem from trafego.alertas_saldo_pendentes();
 select count(*) as segunda_chamada from trafego.alertas_saldo_pendentes();
 reset role;
 

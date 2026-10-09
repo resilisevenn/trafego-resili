@@ -25,7 +25,7 @@ export default async function Dashboard({ searchParams }: Props) {
 
   const { data: contasRaw, error } = await db
     .from('contas_anuncio')
-    .select('id, nome, plataforma, fuso, limite_alerta_saldo, clientes(nome)')
+    .select('id, nome, plataforma, fuso, alerta_saldo_dias, clientes(nome)')
     .eq('ativa', true)
     .order('nome');
 
@@ -55,7 +55,13 @@ export default async function Dashboard({ searchParams }: Props) {
   // Busca do início do anterior (ou do atual) até o fim do atual, numa consulta só.
   const desde = anterior && anterior.de < periodo.de ? anterior.de : periodo.de;
 
-  const [metricasR, campanhasR, saldoR, syncR] = await Promise.all([
+  // Ritmo para "quantos dias o saldo dura": gasto médio dos 7 dias até ontem.
+  const hojeConta = hojeNoFuso(conta.fuso);
+  const d7 = new Date(`${hojeConta}T12:00:00Z`);
+  d7.setUTCDate(d7.getUTCDate() - 7);
+  const inicio7 = d7.toISOString().slice(0, 10);
+
+  const [metricasR, campanhasR, saldoR, syncR, ritmoR] = await Promise.all([
     // Paginado: "Este ano"/"Máximo" passam de 1000 linhas (limite do PostgREST).
     buscarTodas((de, ate) => db.from('metricas_diarias')
       .select('campanha_id, data, investimento, impressoes, alcance, cliques, leads, conversas, parcela_impressoes')
@@ -66,7 +72,7 @@ export default async function Dashboard({ searchParams }: Props) {
       .range(de, ate)),
     db.from('campanhas').select('campanha_id, nome, status').eq('conta_anuncio_id', conta.id),
     db.from('saldo_conta')
-      .select('data, saldo, fonte, coletado_em')
+      .select('data, saldo, teto, fonte, coletado_em')
       .eq('conta_anuncio_id', conta.id)
       .order('data', { ascending: false })
       .limit(1)
@@ -77,7 +83,16 @@ export default async function Dashboard({ searchParams }: Props) {
       .order('inicio', { ascending: false })
       .limit(1)
       .maybeSingle(),
+    db.from('metricas_diarias')
+      .select('investimento')
+      .eq('conta_anuncio_id', conta.id)
+      .gte('data', inicio7)
+      .lt('data', hojeConta),
   ]);
+
+  const mediaDiaria = (ritmoR.data ?? []).reduce((s, m) => s + Number(m.investimento), 0) / 7;
+  const saldoAtual = saldoR.data?.saldo == null ? null : Number(saldoR.data.saldo);
+  const diasDeSaldo = saldoAtual != null && mediaDiaria > 0 ? saldoAtual / mediaDiaria : null;
 
   // numeric chega como string do PostgREST: converte uma vez aqui.
   const linhas: LinhaMetrica[] = metricasR.map((m) => ({
@@ -106,8 +121,14 @@ export default async function Dashboard({ searchParams }: Props) {
       anterior={anterior}
       linhas={linhas}
       nomes={nomes}
-      saldo={saldoR.data ? { saldo: saldoR.data.saldo == null ? null : Number(saldoR.data.saldo), data: saldoR.data.data, fonte: saldoR.data.fonte } : null}
-      limite={conta.limite_alerta_saldo == null ? null : Number(conta.limite_alerta_saldo)}
+      saldo={saldoR.data ? {
+        saldo: saldoAtual,
+        teto: saldoR.data.teto == null ? null : Number(saldoR.data.teto),
+        data: saldoR.data.data,
+        fonte: saldoR.data.fonte,
+      } : null}
+      alertaDias={conta.alerta_saldo_dias}
+      diasDeSaldo={diasDeSaldo}
       sync={syncR.data}
       voltar="/"
       atualizar={<BotaoAtualizar contaId={conta.id} acao={atualizarClinica} />}

@@ -7,8 +7,9 @@
 import { diasDoPeriodo, totais, type LinhaMetrica } from './agregar';
 
 export const LIMITES = {
-  saldoDiasCritico: 3,
-  saldoDiasAtencao: 7,
+  // Saldo: o aviso de cada conta vem de contas_anuncio.alerta_saldo_dias (padrão
+  // 3). Abaixo dele é crítico; até o dobro dele, atenção (antecedência).
+  saldoDiasPadrao: 3,
   // "Parou": gasto zero ontem numa conta que gastava pelo menos isto por dia.
   gastoMinimoParaParada: 5,
   // CPL dos últimos 7 dias acima de (1 + x) × CPL das 4 semanas anteriores.
@@ -38,7 +39,10 @@ export type Contexto = {
   plataforma: string;
   linhas: LinhaMetrica[]; // pelo menos os últimos 35 dias e o mês corrente
   saldo: number | null;
-  limiteAlerta: number | null;
+  // De onde veio o saldo (saldo_conta.fonte): distingue boleto, teto de gastos,
+  // conta sem teto e boleto sem permissão de leitura.
+  fonteSaldo: string | null;
+  alertaDias: number | null;
   verbaMensal: number | null;
   cplMeta: number | null;
   ultimaColeta: { inicio: string; status: string } | null;
@@ -77,13 +81,16 @@ export function saude(c: Contexto): Saude {
   const alertas: Alerta[] = [];
   const add = (nivel: Nivel, tipo: string, texto: string) => alertas.push({ nivel, tipo, texto });
 
-  // Saldo
-  if (c.saldo != null && c.limiteAlerta != null && c.saldo < c.limiteAlerta) {
-    add('critico', 'saldo', `Saldo abaixo do limite de alerta`);
-  } else if (diasDeSaldo != null && diasDeSaldo < LIMITES.saldoDiasCritico) {
-    add('critico', 'saldo', `Saldo acaba em ~${Math.max(Math.floor(diasDeSaldo), 0)} dia(s)`);
-  } else if (diasDeSaldo != null && diasDeSaldo < LIMITES.saldoDiasAtencao) {
-    add('atencao', 'saldo', `Saldo para ~${Math.floor(diasDeSaldo)} dias`);
+  // Saldo, por DIAS (decisão de 09/10/2026): saldo ÷ gasto médio dos últimos 7 dias.
+  const aviso = c.alertaDias ?? LIMITES.saldoDiasPadrao;
+  const boleto = c.fonteSaldo === 'credito_pre_pago';
+  const oQue = boleto ? 'Crédito do boleto/Pix acaba' : 'Chega no teto de gastos';
+  if (c.fonteSaldo === 'pre_pago_sem_permissao' || c.fonteSaldo === 'pre_pago_texto_desconhecido') {
+    add('atencao', 'saldo', 'Conta de boleto/Pix: não foi possível ler o crédito (permissão na Meta)');
+  } else if (diasDeSaldo != null && diasDeSaldo < aviso) {
+    add('critico', 'saldo', `${oQue} em ~${Math.max(Math.floor(diasDeSaldo), 0)} dia(s)`);
+  } else if (diasDeSaldo != null && diasDeSaldo < aviso * 2) {
+    add('atencao', 'saldo', `${oQue} em ~${Math.floor(diasDeSaldo)} dias`);
   }
 
   // Parou: média dos 7 dias ANTES de ontem, para ontem zerado não puxar a média.

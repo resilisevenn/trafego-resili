@@ -3,6 +3,7 @@
 // Cabeçalho único do sistema, usado pelo app real e pela prévia local (que só
 // troca o prefixo das rotas). O link da página atual fica destacado.
 
+import Image from 'next/image';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 
@@ -23,7 +24,10 @@ export function Cabecalho({ base = '', email, admin, sair }: {
   return (
     <header className="border-b border-border">
       <div className="mx-auto max-w-[1200px] px-5 h-14 flex items-center gap-6">
-        <Link href={inicio} className="font-semibold text-sm">Tráfego — Resili Sevenn</Link>
+        <Link href={inicio} className="flex items-center gap-2 shrink-0" aria-label="Tráfego — Resili Sevenn">
+          <Image src="/logo-resili-sevenn.png" alt="Resili Sevenn" width={192} height={20} className="h-5 w-auto" priority />
+          <span className="font-display text-lg text-accent-light leading-none">Tráfego</span>
+        </Link>
         <nav className="flex items-center gap-1">
           {links.map((l) => {
             const ativo = atual === l.href;
