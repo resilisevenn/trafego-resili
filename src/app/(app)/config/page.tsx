@@ -108,9 +108,10 @@ export default async function ConfigPage({ searchParams }: Props) {
       <Secao
         titulo="Contas de anúncio"
         acao={
-          <div className="flex flex-wrap items-center gap-3">
-            <FiltroPlataforma caminho="/config" parametro="plataforma" atual={filtro} params={params} />
+          // Coluna: "Buscar contas novas" em cima, filtros embaixo, tudo à direita.
+          <div className="flex flex-col items-end gap-2">
             <BotaoAcao rotulo="↻ Buscar contas novas e coletar agora" rotuloPendente="Buscando na Meta e no Google…" acao={buscarContasAgora} />
+            <FiltroPlataforma caminho="/config" parametro="plataforma" atual={filtro} params={params} />
           </div>
         }
         ajuda="Contas novas entram sozinhas na coleta das 06h, ou na hora pelo botão ao lado. Ligue cada uma a um cliente. Verba e meta de CPL são os combinados com o cliente (vazio = sem alerta). O aviso de saldo é em dias: quanto o saldo dura no ritmo atual.">
@@ -200,8 +201,7 @@ export default async function ConfigPage({ searchParams }: Props) {
   );
 }
 
-// `acao`: botão opcional à direita da descrição, na mesma linha. Em tela estreita
-// ele desce para baixo do texto (flex-wrap), para não espremer a frase.
+// `acao`: botões à direita da descrição, na mesma linha (no celular, descem).
 function Secao({ titulo, ajuda, acao, children }: {
   titulo: string;
   ajuda: string;
@@ -209,11 +209,14 @@ function Secao({ titulo, ajuda, acao, children }: {
   children: React.ReactNode;
 }) {
   return (
-    <section>
-      <h2 className="font-semibold">{titulo}</h2>
-      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 mt-1 mb-4">
-        <p className="text-sm text-muted max-w-2xl">{ajuda}</p>
-        {acao}
+    // Linha divisória ENTRE os blocos: a primeira seção (Clientes) não tem linha em cima.
+    <section className="border-t border-border pt-10 first-of-type:border-t-0 first-of-type:pt-0">
+      <h2 className="font-display text-2xl">{titulo}</h2>
+      {/* Texto à esquerda e botões à direita NA MESMA LINHA (não quebra a partir de
+          tela média). No celular, os botões descem e ficam à direita. */}
+      <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between md:gap-6 mt-1 mb-4">
+        <p className="text-sm text-muted max-w-2xl md:flex-1">{ajuda}</p>
+        {acao && <div className="self-end md:self-start shrink-0">{acao}</div>}
       </div>
       {children}
     </section>

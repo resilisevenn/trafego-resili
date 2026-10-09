@@ -11,15 +11,15 @@ export function BotaoAcao({ rotulo, rotuloPendente, acao }: {
   const [pendente, iniciar] = useTransition();
   const [aviso, setAviso] = useState<{ ok: boolean; mensagem: string } | null>(null);
   return (
-    <div className="flex flex-wrap items-center gap-3">
-      <button type="button" className="btn btn-primary" disabled={pendente} onClick={() => iniciar(async () => setAviso(await acao()))}>
-        {pendente ? rotuloPendente : rotulo}
-      </button>
+    <div className="flex flex-wrap items-center justify-end gap-3">
       {aviso && (
-        <span className={`text-xs ${aviso.ok ? 'text-muted' : 'text-bad'}`} role="status">
+        <span className={`text-xs max-w-xs text-right ${aviso.ok ? 'text-muted' : 'text-bad'}`} role="status">
           {aviso.ok ? '✓' : '⚠'} {aviso.mensagem}
         </span>
       )}
+      <button type="button" className="btn btn-primary" disabled={pendente} onClick={() => iniciar(async () => setAviso(await acao()))}>
+        {pendente ? rotuloPendente : rotulo}
+      </button>
     </div>
   );
 }
