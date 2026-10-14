@@ -128,6 +128,14 @@ describe('seriePorDia', () => {
 });
 
 describe('porCampanha', () => {
+  it('esconde campanha sem gasto nem impressão no período', () => {
+    const r = porCampanha([
+      l({ campanha_id: 'gastou', investimento: 32.07, impressoes: 879 }),
+      l({ campanha_id: 'zerada', investimento: 0, impressoes: 0 }),
+      l({ campanha_id: 'so_impressao', investimento: 0, impressoes: 10 }),
+    ]);
+    expect(r.map((c) => c.campanha_id)).toEqual(['gastou', 'so_impressao']);
+  });
   it('agrupa e ordena por investimento', () => {
     const r = porCampanha([l({ campanha_id: 'x', investimento: 1 }), l({ campanha_id: 'y', investimento: 9 })]);
     expect(r.map((c) => c.campanha_id)).toEqual(['y', 'x']);
@@ -170,5 +178,16 @@ describe('custo por resultado', () => {
   });
   it('sem lead nem conversa: tudo nulo', () => {
     expect(totais([l({ investimento: 50 })])).toMatchObject({ tipo_resultado: null, custo_resultado: null, custo_conversa: null });
+  });
+});
+
+describe('seriePorDia de conversas', () => {
+  it('conta de mensagem: soma conversas por dia', () => {
+    const s = seriePorDia(
+      [l({ data: '2026-10-01', conversas: 3 }), l({ campanha_id: 'b', data: '2026-10-01', conversas: 2 })],
+      { de: '2026-10-01', ate: '2026-10-02' },
+      'conversas',
+    );
+    expect(s).toEqual([{ data: '2026-10-01', valor: 5 }, { data: '2026-10-02', valor: 0 }]);
   });
 });

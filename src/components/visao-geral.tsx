@@ -32,13 +32,14 @@ export const PERIODOS_GERAL = [
   ['mes', 'Este mês'],
 ] as const;
 
-export function VisaoGeral({ linhas, hrefConta, periodo, rotuloPeriodo, hrefPeriodo, atualizar, filtro }: {
+export function VisaoGeral({ linhas, hrefConta, periodo, rotuloPeriodo, hrefPeriodo, atualizar, filtro, ultimaAtualizacao }: {
   linhas: LinhaGeral[];
   hrefConta: (id: string) => string;
   periodo: string; // chave ativa
   rotuloPeriodo: string; // "01/10 a 07/10 · comparado com 24/09 a 30/09"
   hrefPeriodo: (chave: string) => string;
   atualizar?: React.ReactNode; // botão "Atualizar todas"
+  ultimaAtualizacao?: string | null; // ISO da coleta mais recente que deu certo
   filtro?: React.ReactNode; // botões Meta Ads / Google Ads
 }) {
   const criticos = linhas.filter((l) => l.saude.alertas.some((a) => a.nivel === 'critico')).length;
@@ -50,7 +51,6 @@ export function VisaoGeral({ linhas, hrefConta, periodo, rotuloPeriodo, hrefPeri
         <div>
           <h1 className="font-display text-3xl">Visão geral</h1>
           <p className="text-sm text-muted mt-1">{rotuloPeriodo}</p>
-          <p className="text-xs text-faint">Os alertas usam sempre os últimos 7 dias fechados.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <div className="flex gap-1" role="group" aria-label="Período dos números">
@@ -71,13 +71,22 @@ export function VisaoGeral({ linhas, hrefConta, periodo, rotuloPeriodo, hrefPeri
       </div>
 
       {/* Cards à esquerda, filtro de plataforma à direita, na mesma linha. */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
+      {/* items-end: os cards ficam na altura dos botões Meta/Google, e a frase
+          acima deles sobe (-mt) para não abrir espaço sobrando sob o cabeçalho. */}
+      <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="grid gap-3 grid-cols-3 w-full max-w-xl">
           <Resumo rotulo="Contas" valor={linhas.length} />
           <Resumo rotulo="🔴 Ação agora" valor={criticos} destaque={criticos > 0 ? 'bad' : undefined} />
           <Resumo rotulo="🟡 Atenção" valor={atencao} destaque={atencao > 0 ? 'warn' : undefined} />
         </div>
-        {filtro}
+        {/* Frase corrida acima dos filtros Meta/Google, à direita: deixa a linha dos
+            botões de período livre e alinhada. */}
+        <div className="flex flex-col items-end gap-1 -mt-4">
+          <span className="text-[11px] text-faint whitespace-nowrap">
+            {ultimaAtualizacao ? `Última atualização às ${horaBrasilia(ultimaAtualizacao)}` : 'Ainda sem atualização'}
+          </span>
+          {filtro}
+        </div>
       </div>
 
       <div className="card overflow-x-auto">
@@ -88,9 +97,9 @@ export function VisaoGeral({ linhas, hrefConta, periodo, rotuloPeriodo, hrefPeri
               <th className="p-3 font-medium">Investimento</th>
               <th className="p-3 font-medium">Resultados</th>
               <th className="p-3 font-medium" title="Custo por lead quando a conta tem leads; custo por conversa nas contas de mensagem.">Custo/resultado</th>
-              <th className="p-3 font-medium">Saldo</th>
-              <th className="p-3 font-medium">Verba do mês</th>
-              <th className="text-left p-3 font-medium">Alertas</th>
+              <th className="p-3 font-medium" title="Saldo atual: não muda com o filtro de período.">Saldo (agora)</th>
+              <th className="p-3 font-medium" title="Mês corrente: não muda com o filtro de período.">Verba do mês</th>
+              <th className="text-left p-3 font-medium" title="Calculados sempre com os últimos 7 dias fechados (até ontem), para não dar alarme falso com dia incompleto.">Alertas (últimos 7 dias)</th>
             </tr>
           </thead>
           <tbody className="text-right">
@@ -227,4 +236,11 @@ function CelulaSaldo({ linha }: { linha: LinhaGeral }) {
       <div className="text-[11px] text-faint" title={sit.detalhe}>{sit.rotulo}</div>
     </>
   );
+}
+
+// "06:20 do dia 14/10", no horário de Brasília (a coleta grava em UTC).
+function horaBrasilia(iso: string) {
+  const d = new Date(iso);
+  const f = (o: Intl.DateTimeFormatOptions) => d.toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo', ...o });
+  return `${f({ hour: '2-digit', minute: '2-digit' })} do dia ${f({ day: '2-digit', month: '2-digit' })}`;
 }

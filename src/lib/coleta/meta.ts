@@ -176,12 +176,28 @@ export function paraSaldo(c: ContaMeta, financiamento: Financiamento = null): Sa
 
 // ── HTTP ─────────────────────────────────────────────────────────────────────
 
+// Token da Meta começa com "EAA". Visto em 13/10/2026: o erro "Malformed access
+// token" repetia o token inteiro, que apareceu na tela e foi gravado no sync_log.
+export const ocultarToken = (texto: string) => texto.replace(/EAA[A-Za-z0-9]{10,}/g, 'EAA…[token oculto]');
+
+// Códigos de limite de chamadas da Meta (app, usuário, conta de anúncio e Ads
+// Insights). Em 14/10/2026 a coleta das 06h caiu inteira com o code 4 depois de
+// um dia de testes: em vez de desistir, espera e tenta de novo.
+const CODIGOS_LIMITE = new Set([4, 17, 32, 613, 80000, 80003, 80004, 80014]);
+const ESPERAS_MS = [5_000, 15_000, 30_000];
+const esperar = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function get<T>(url: string): Promise<T> {
-  const r = await fetch(url, { signal: AbortSignal.timeout(30_000) });
-  const corpo = await r.json();
+  let corpo = await (await fetch(url, { signal: AbortSignal.timeout(30_000) })).json();
+  for (const ms of ESPERAS_MS) {
+    if (!corpo.error || !CODIGOS_LIMITE.has(corpo.error.code)) break;
+    await esperar(ms);
+    corpo = await (await fetch(url, { signal: AbortSignal.timeout(30_000) })).json();
+  }
   if (corpo.error) {
-    // A mensagem da Graph API não contém o token.
-    throw new Error(`Meta: ${corpo.error.message} (code ${corpo.error.code})`);
+    // A Graph API PODE devolver o token na mensagem ("Malformed access token
+    // EAA..."); ela vai para a tela e para o sync_log. Sempre passar por ocultarToken.
+    throw new Error(`Meta: ${ocultarToken(corpo.error.message)} (code ${corpo.error.code})`);
   }
   return corpo as T;
 }
@@ -211,7 +227,7 @@ export async function buscarFinanciamento(contaId: string, token: string): Promi
   const p = new URLSearchParams({ fields: 'funding_source_details', access_token: token });
   const r = await fetch(`${GRAPH}/act_${contaId}?${p}`, { signal: AbortSignal.timeout(30_000) });
   const corpo = await r.json();
-  if (corpo.error) return { erro: corpo.error.message };
+  if (corpo.error) return { erro: ocultarToken(corpo.error.message) };
   return corpo.funding_source_details ?? null;
 }
 

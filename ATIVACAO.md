@@ -117,6 +117,19 @@ mesma regra, no nó "Enviar no grupo (UazAPI)". Lá a escolha é pelo NOME do cl
 ajustar a lista. Chamar a função marca o aviso do dia como enviado: rodar o fluxo
 na mão consome o aviso daquele dia.
 
+**Número reserva e token que muda (13/10/2026).** Reconectar o WhatsApp no Clinic 360
+APAGA a instância na UazAPI e cria outra: o `instance_token` muda a cada reconexão
+(`whatsapp-connect/index.ts`). Por isso, em todo nó de envio dos dois fluxos:
+
+- Se o principal ("Uazapi Jackson Resili") falhar, a mesma mensagem sai pelo número
+  da clínica resilisevenn (credencial "Uazapi Resili Reserva"), que está nos dois grupos.
+- Na mesma execução, um aviso único vai ao grupo Jackson pelo reserva, pedindo para
+  atualizar a credencial.
+- Ao reconectar qualquer um dos dois números: copiar o `instance_token` novo da linha em
+  `whatsapp_connections` (Supabase do Clinic 360) para a credencial correspondente no n8n.
+- Pendente, se a reconexão for frequente: o Clinic 360 expor um envio por ID da conexão
+  (que não muda), para o n8n não guardar token nenhum.
+
 Cliente novo entra no [R7] sozinho. Para mandar ao grupo Jackson, acrescentar o
 `cliente_id` dele (tabela `trafego.clientes`) à lista do nó de segunda e atualizar esta tabela.
 

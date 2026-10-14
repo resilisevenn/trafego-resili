@@ -233,7 +233,7 @@ export function variacao(atual: number | null, anterior: number | null): number 
 
 // ── Séries e tabela ──────────────────────────────────────────────────────────
 
-export function seriePorDia(linhas: LinhaMetrica[], p: Periodo, campo: 'investimento' | 'leads') {
+export function seriePorDia(linhas: LinhaMetrica[], p: Periodo, campo: 'investimento' | 'leads' | 'conversas') {
   const porDia = new Map<string, number | null>();
   for (const l of linhas) {
     const v = l[campo];
@@ -249,5 +249,9 @@ export function porCampanha(linhas: LinhaMetrica[]) {
   for (const l of linhas) grupos.set(l.campanha_id, [...(grupos.get(l.campanha_id) ?? []), l]);
   return [...grupos]
     .map(([campanha_id, ls]) => ({ campanha_id, ...totais(ls) }))
+    // A Meta devolve linha zerada para campanha pausada no meio da janela (ex.:
+    // [GPV] da Dra Isadora em 07–08/10). Sem gasto e sem impressão no período,
+    // ela não diz nada e só polui a tabela.
+    .filter((c) => c.investimento > 0 || c.impressoes > 0)
     .sort((a, b) => b.investimento - a.investimento);
 }

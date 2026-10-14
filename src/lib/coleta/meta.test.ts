@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { paraMetrica, paraSaldo, resultadoDe, saldoDoTexto, type ContaMeta, type LinhaInsight } from './meta';
+import { ocultarToken, paraMetrica, paraSaldo, resultadoDe, saldoDoTexto, type ContaMeta, type LinhaInsight } from './meta';
 
 const base: LinhaInsight = {
   campaign_id: '1',
@@ -112,5 +112,16 @@ describe('resultadoDe', () => {
   it('sem resultado é nulo, não zero', () => {
     expect(resultadoDe(undefined)).toEqual({ resultado: null, resultado_tipo: null });
     expect(resultadoDe([{ indicator: 'x', values: [] }])).toEqual({ resultado: null, resultado_tipo: null });
+  });
+});
+
+describe('ocultarToken', () => {
+  it('tira o token da mensagem de erro da Meta', () => {
+    const msg = 'Malformed access token EAAFICTICIO0000000000000000000000000000';
+    expect(ocultarToken(msg)).not.toMatch(/EAAFICTICIO/);
+    expect(ocultarToken(msg)).toMatch(/^Malformed access token EAA…\[token oculto\]/);
+  });
+  it('mensagem sem token passa igual', () => {
+    expect(ocultarToken('Invalid OAuth access token.')).toBe('Invalid OAuth access token.');
   });
 });

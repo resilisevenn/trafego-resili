@@ -99,6 +99,8 @@ export default async function VisaoGeralPage({ searchParams }: Props) {
   };
   const saldos = primeiro(saldosR.data);
   const syncs = primeiro(syncR);
+  // Coleta mais recente que deu certo, entre as contas que este usuário vê.
+  const ultimaAtualizacao = syncR.filter((x) => x.status === 'ok').map((x) => x.inicio).sort().at(-1) ?? null;
 
   const linhas: LinhaGeral[] = contas
     .map((c) => {
@@ -144,6 +146,7 @@ export default async function VisaoGeralPage({ searchParams }: Props) {
       }}
       filtro={<FiltroPlataforma caminho="/" parametro="plataforma" atual={plataforma} params={q} />}
       atualizar={<BotaoAcao rotulo="↻ Atualizar todas" rotuloPendente="Coletando todas as contas…" acao={atualizarTodas} />}
+      ultimaAtualizacao={ultimaAtualizacao}
     />
   );
 }

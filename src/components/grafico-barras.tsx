@@ -41,7 +41,9 @@ export function GraficoBarras({ titulo, serie, formato }: {
         <span className="text-sm font-medium">{titulo}</span>
         {sel ? (
           <span className="text-sm text-muted tabular-nums" aria-live="polite">
-            {fmtData(sel.data)}: {formatar(sel.valor)}
+            {fmtData(sel.data)}:{' '}
+            {/* Valor do dia em verde-claro da marca: é o que o olho procura. */}
+            <span className="font-semibold text-accent-light">{formatar(sel.valor)}</span>
           </span>
         ) : (
           <button

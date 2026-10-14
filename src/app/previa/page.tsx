@@ -75,6 +75,7 @@ export default async function PreviaGeral({ searchParams }: Props) {
       }}
       filtro={<FiltroPlataforma caminho="/previa" parametro="plataforma" atual={plataforma} params={q} />}
       atualizar={<BotaoAcao rotulo="↻ Atualizar todas" rotuloPendente="Coletando todas as contas…" acao={atualizarFicticio} />}
+      ultimaAtualizacao={`${hoje}T09:20:00Z`}
     />
   );
 }

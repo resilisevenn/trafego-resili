@@ -60,7 +60,13 @@ export function Painel(d: DadosPainel) {
 
       <div className="grid gap-4 md:grid-cols-2">
         <GraficoBarras titulo="Investimento por dia" serie={seriePorDia(doPeriodo, d.periodo, 'investimento')} formato="moeda" />
-        <GraficoBarras titulo={d.plataforma === 'google' ? 'Conversões por dia' : 'Leads por dia'} serie={seriePorDia(doPeriodo, d.periodo, 'leads')} formato="contagem" />
+        {/* Resultado da conta no período: conversas nas contas de mensagem; senão leads
+            (no Google, chamados de conversões). Mesma regra do custo por resultado. */}
+        <GraficoBarras
+          titulo={d.plataforma === 'google' ? 'Conversões por dia' : atual.tipo_resultado === 'conversa' ? 'Conversas por dia' : 'Leads por dia'}
+          serie={seriePorDia(doPeriodo, d.periodo, atual.tipo_resultado === 'conversa' ? 'conversas' : 'leads')}
+          formato="contagem"
+        />
       </div>
 
       <TabelaCampanhas linhas={porCampanha(doPeriodo)} nomes={d.nomes} plataforma={d.plataforma} />
